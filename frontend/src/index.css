@@ -1,0 +1,33 @@
+@import "tailwindcss";
+
+:root {
+  --color-up: #ef4444;
+  --color-down: #22c55e;
+  --color-flat: #9ca3af;
+}
+
+body {
+  @apply bg-gray-950 text-gray-100 antialiased;
+  font-family: "Inter", system-ui, -apple-system, sans-serif;
+}
+
+/* 中国市场涨红跌绿 */
+.text-up { color: var(--color-up); }
+.text-down { color: var(--color-down); }
+.text-flat { color: var(--color-flat); }
+.bg-up { background-color: var(--color-up); }
+.bg-down { background-color: var(--color-down); }
+
+/* 情绪周期颜色 */
+.cycle-ice { @apply text-blue-400 bg-blue-950; }
+.cycle-chaos-low { @apply text-gray-400 bg-gray-800; }
+.cycle-start { @apply text-emerald-400 bg-emerald-950; }
+.cycle-ferment { @apply text-lime-400 bg-lime-950; }
+.cycle-climax { @apply text-red-400 bg-red-950; }
+.cycle-chaos-high { @apply text-yellow-400 bg-yellow-950; }
+.cycle-retreat { @apply text-orange-400 bg-orange-950; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { @apply bg-gray-700 rounded-full; }
