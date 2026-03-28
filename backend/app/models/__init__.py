@@ -8,6 +8,7 @@ from app.models.strategy import Strategy
 from app.models.sentiment import SentimentCycleLog, OperationRecord
 from app.models.user import User
 from app.models.llm_usage import LLMUsage
+from app.models.market import MarketSnapshot
 
 __all__ = [
     "Stock", "StockPrice",
@@ -15,6 +16,7 @@ __all__ = [
     "AnalysisHistory",
     "Watchlist",
     "NewsCache",
+    "MarketSnapshot",
     "DailyReview", "LimitUpBoard",
     "Strategy",
     "SentimentCycleLog", "OperationRecord",

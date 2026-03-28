@@ -1,6 +1,9 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Shell from "./components/layout/Shell";
 import Dashboard from "./pages/Dashboard";
+import RatingBoard from "./pages/RatingBoard";
+import Watchlist from "./pages/Watchlist";
+import News from "./pages/News";
 import Placeholder from "./pages/Placeholder";
 
 export default function App() {
@@ -9,9 +12,9 @@ export default function App() {
       <Routes>
         <Route element={<Shell />}>
           <Route index element={<Dashboard />} />
-          <Route path="ratings" element={<Placeholder />} />
-          <Route path="watchlist" element={<Placeholder />} />
-          <Route path="news" element={<Placeholder />} />
+          <Route path="ratings" element={<RatingBoard />} />
+          <Route path="watchlist" element={<Watchlist />} />
+          <Route path="news" element={<News />} />
           <Route path="review" element={<Placeholder />} />
           <Route path="review/history" element={<Placeholder />} />
           <Route path="strategies" element={<Placeholder />} />

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import api from "../api/client";
 import { getPctColor, formatPct } from "../utils/stockColor";
 
@@ -31,12 +31,9 @@ export default function Dashboard() {
   const [breadth, setBreadth] = useState<Breadth | null>(null);
   const [sectors, setSectors] = useState<SectorItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
 
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  async function loadData() {
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
       const [overviewRes, sectorsRes] = await Promise.allSettled([
@@ -44,8 +41,9 @@ export default function Dashboard() {
         api.get("/market/sectors?sector_type=concept&limit=20"),
       ]);
       if (overviewRes.status === "fulfilled") {
-        setIndices(overviewRes.value.data.indices || []);
-        setBreadth(overviewRes.value.data.breadth || null);
+        const data = overviewRes.value.data;
+        setIndices(data.indices || []);
+        setBreadth(data.breadth || null);
       }
       if (sectorsRes.status === "fulfilled") {
         setSectors(sectorsRes.value.data || []);
@@ -53,22 +51,56 @@ export default function Dashboard() {
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  async function handleSync() {
+    setSyncing(true);
+    try {
+      await api.post("/sync/market");
+      await loadData();
+    } catch {
+      /* sync failed */
+    } finally {
+      setSyncing(false);
+    }
   }
+
+  const hasData = indices.length > 0;
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-bold">市场总览</h2>
-        <button
-          onClick={loadData}
-          className="px-3 py-1.5 text-sm bg-gray-800 hover:bg-gray-700 rounded-lg transition"
-        >
-          刷新
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleSync}
+            disabled={syncing}
+            className="px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-500 disabled:opacity-50 rounded-lg transition"
+          >
+            {syncing ? "同步中..." : "同步数据"}
+          </button>
+          <button
+            onClick={loadData}
+            className="px-3 py-1.5 text-sm bg-gray-800 hover:bg-gray-700 rounded-lg transition"
+          >
+            刷新
+          </button>
+        </div>
       </div>
 
       {loading ? (
         <div className="text-gray-500 text-center py-20">加载中...</div>
+      ) : !hasData ? (
+        <div className="text-gray-500 text-center py-20">
+          <p>暂无市场数据</p>
+          <p className="text-xs mt-2 text-gray-600">
+            点击"同步数据"从外部接口采集并存入数据库
+          </p>
+        </div>
       ) : (
         <>
           {/* 大盘指数卡片 */}
