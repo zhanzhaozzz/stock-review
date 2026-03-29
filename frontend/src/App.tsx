@@ -4,6 +4,11 @@ import Dashboard from "./pages/Dashboard";
 import RatingBoard from "./pages/RatingBoard";
 import Watchlist from "./pages/Watchlist";
 import News from "./pages/News";
+import StockDetail from "./pages/StockDetail";
+import Review from "./pages/Review";
+import Strategies from "./pages/Strategies";
+import Operations from "./pages/Operations";
+import Settings from "./pages/Settings";
 import Placeholder from "./pages/Placeholder";
 
 export default function App() {
@@ -15,12 +20,12 @@ export default function App() {
           <Route path="ratings" element={<RatingBoard />} />
           <Route path="watchlist" element={<Watchlist />} />
           <Route path="news" element={<News />} />
-          <Route path="review" element={<Placeholder />} />
-          <Route path="review/history" element={<Placeholder />} />
-          <Route path="strategies" element={<Placeholder />} />
-          <Route path="operations" element={<Placeholder />} />
-          <Route path="stock/:code" element={<Placeholder />} />
-          <Route path="settings" element={<Placeholder />} />
+          <Route path="review" element={<Review />} />
+          <Route path="review/history" element={<Review />} />
+          <Route path="strategies" element={<Strategies />} />
+          <Route path="operations" element={<Operations />} />
+          <Route path="stock/:code" element={<StockDetail />} />
+          <Route path="settings" element={<Settings />} />
           <Route path="*" element={<Placeholder />} />
         </Route>
       </Routes>

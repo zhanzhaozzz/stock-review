@@ -14,28 +14,25 @@ class DailyReview(Base):
     date: Mapped[date] = mapped_column(Date, unique=True, index=True)
 
     # --- 市场情绪 ---
+    market_sentiment: Mapped[str | None] = mapped_column(String(20))
     market_height: Mapped[int | None] = mapped_column(Integer)
     market_leader: Mapped[str | None] = mapped_column(String(100))
-    sentiment_cycle: Mapped[str | None] = mapped_column(String(20))
+    total_limit_up: Mapped[int | None] = mapped_column(Integer)
+    first_board_count: Mapped[int | None] = mapped_column(Integer)
+    broken_board_count: Mapped[int | None] = mapped_column(Integer)
     sentiment_detail: Mapped[str | None] = mapped_column(Text)
 
-    # --- 主线板块 ---
-    main_sector_name: Mapped[str | None] = mapped_column(String(50))
-    main_sector_cycle: Mapped[str | None] = mapped_column(String(20))
-    main_sector_leader: Mapped[str | None] = mapped_column(String(100))
-
-    # --- 次线板块 ---
-    sub_sector_name: Mapped[str | None] = mapped_column(String(50))
-    sub_sector_cycle: Mapped[str | None] = mapped_column(String(20))
-    sub_sector_leader: Mapped[str | None] = mapped_column(String(100))
+    # --- 板块 ---
+    main_sector: Mapped[str | None] = mapped_column(String(200))
+    sub_sector: Mapped[str | None] = mapped_column(String(200))
 
     # --- 断板高标 ---
-    broken_board_status: Mapped[str | None] = mapped_column(Text)
+    broken_boards: Mapped[str | None] = mapped_column(Text)
 
     # --- 复盘内容 ---
     review_summary: Mapped[str | None] = mapped_column(Text)
     next_day_plan: Mapped[str | None] = mapped_column(Text)
-    applicable_strategy: Mapped[str | None] = mapped_column(String(50))
+    applicable_strategy: Mapped[str | None] = mapped_column(String(100))
     suggested_position: Mapped[str | None] = mapped_column(String(50))
 
     # --- AI 辅助 ---
@@ -43,8 +40,8 @@ class DailyReview(Base):
     ai_next_day_suggestion: Mapped[str | None] = mapped_column(Text)
 
     # --- 盘面过程 ---
-    market_action: Mapped[str | None] = mapped_column(String(10))  # 普涨/轮动/抱团
-    market_result: Mapped[str | None] = mapped_column(String(10))  # 分歧/修复/一致
+    market_action: Mapped[str | None] = mapped_column(String(10))
+    market_result: Mapped[str | None] = mapped_column(String(10))
 
     is_confirmed: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)

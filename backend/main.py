@@ -10,6 +10,7 @@ from app.database import init_db, async_session
 from app.cache import get_redis, close_redis
 from app.api.v1.router import api_router
 from app.services.seed import run_seed
+from app.services.scheduler import setup_scheduler, get_scheduler
 
 logging.basicConfig(
     level=logging.INFO,
@@ -30,7 +31,18 @@ async def lifespan(app: FastAPI):
         logger.info("Redis connected")
     except Exception as e:
         logger.warning("Redis not available, cache will be skipped: %s", e)
+    try:
+        setup_scheduler()
+        logger.info("Scheduler started")
+    except Exception as e:
+        logger.warning("Scheduler failed to start: %s", e)
     yield
+    try:
+        scheduler = get_scheduler()
+        if scheduler.running:
+            scheduler.shutdown(wait=False)
+    except Exception:
+        pass
     await close_redis()
     logger.info("Stock Review stopped")
 
