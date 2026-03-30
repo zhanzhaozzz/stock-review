@@ -1,7 +1,7 @@
 """量化评级 API。"""
 import asyncio
 import logging
-from datetime import date, datetime
+from datetime import date
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select, desc
@@ -11,6 +11,7 @@ from app.database import get_db
 from app.cache import cache_get, cache_set
 from app.core.rating_engine import rate_stock
 from app.models.rating import Rating
+from app.models.stock import Stock
 from app.schemas.rating import (
     RatingRunRequest,
     RatingRunResponse,
@@ -209,6 +210,88 @@ async def rating_history(
             value_score=r.value_score or 0,
             sentiment_score=r.sentiment_score or 0,
             ai_score=r.ai_score or 0,
+        )
+        for r in rows
+    ]
+
+
+@router.get("/scan", response_model=list[RatingItem])
+async def scan_ratings(
+    sector: str = Query(None, description="按板块关键词筛选"),
+    min_score: float = Query(60, ge=0, le=100),
+    limit: int = Query(50, ge=1, le=200),
+    db: AsyncSession = Depends(get_db),
+):
+    """按板块/评分条件扫描评级结果。"""
+    from sqlalchemy import func
+
+    latest_date_stmt = select(func.max(Rating.date))
+    latest_date_result = await db.execute(latest_date_stmt)
+    latest_date = latest_date_result.scalar()
+    if not latest_date:
+        return []
+
+    query_limit = limit if not sector else max(limit * 5, 200)
+    stmt = (
+        select(Rating)
+        .where(Rating.date == latest_date, Rating.total_score >= min_score)
+        .order_by(desc(Rating.total_score))
+        .limit(query_limit)
+    )
+    result = await db.execute(stmt)
+    rows = result.scalars().all()
+
+    if sector:
+        code_list = [r.code for r in rows]
+        stock_meta: dict[str, tuple[str, str]] = {}
+        if code_list:
+            stock_stmt = (
+                select(Stock.code, Stock.sector, Stock.industry)
+                .where(Stock.code.in_(code_list))
+            )
+            stock_result = await db.execute(stock_stmt)
+            stock_meta = {
+                code: (sec or "", ind or "")
+                for code, sec, ind in stock_result.all()
+            }
+
+        keyword = sector.strip().lower()
+        filtered = []
+        for r in rows:
+            sec, ind = stock_meta.get(r.code, ("", ""))
+            meta_text = f"{sec} {ind}".lower()
+            reason_text = ""
+            if isinstance(r.reason, dict):
+                reason_text = str(r.reason.get("text", "") or "")
+            name_text = (r.name or "").lower()
+            if keyword in meta_text or keyword in reason_text.lower() or keyword in name_text:
+                filtered.append(r)
+        rows = filtered[:limit]
+    else:
+        rows = rows[:limit]
+
+    return [
+        RatingItem(
+            code=r.code,
+            name=r.name,
+            market=r.market,
+            date=str(r.date),
+            trend_score=r.trend_score or 0,
+            momentum_score=r.momentum_score or 0,
+            volatility_score=r.volatility_score or 0,
+            volume_score=r.volume_score or 0,
+            value_score=r.value_score or 0,
+            sentiment_score=r.sentiment_score or 0,
+            fundamental_score=r.fundamental_score,
+            ai_score=r.ai_score or 0,
+            total_score=r.total_score or 0,
+            rating=r.rating or "",
+            reason=r.reason.get("text", "") if isinstance(r.reason, dict) else str(r.reason or ""),
+            pe=r.pe,
+            pb=r.pb,
+            roe=r.roe,
+            market_cap=r.market_cap,
+            net_flow=r.net_flow,
         )
         for r in rows
     ]

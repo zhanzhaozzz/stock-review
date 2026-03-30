@@ -80,20 +80,6 @@ async def recommend_strategies(db: AsyncSession = Depends(get_db)):
     return await match_strategies(phase, db)
 
 
-@router.get("/recommend")
-async def recommend_strategies(db: AsyncSession = Depends(get_db)):
-    """基于当前情绪周期推荐适用战法。"""
-    from app.core.strategy_matcher import match_strategies
-    from app.models.sentiment import SentimentCycleLog
-
-    stmt = select(SentimentCycleLog).order_by(desc(SentimentCycleLog.date)).limit(1)
-    result = await db.execute(stmt)
-    latest = result.scalar_one_or_none()
-
-    cycle_phase = latest.cycle_phase if latest else "震荡"
-    return await match_strategies(cycle_phase, db)
-
-
 @router.delete("/{strategy_id}")
 async def delete_strategy(strategy_id: int, db: AsyncSession = Depends(get_db)):
     """删除战法。"""

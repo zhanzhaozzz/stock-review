@@ -20,6 +20,12 @@ logger = logging.getLogger(__name__)
 _scheduler: AsyncIOScheduler = None
 
 
+def _shift_time(hour: int, minute: int, offset_min: int) -> tuple[int, int]:
+    """按分钟偏移并归一化到 24 小时制。"""
+    total = (hour * 60 + minute + offset_min) % (24 * 60)
+    return total // 60, total % 60
+
+
 def get_scheduler() -> AsyncIOScheduler:
     global _scheduler
     if _scheduler is None:
@@ -34,6 +40,9 @@ def setup_scheduler():
 
     hour = settings.refresh_hour
     minute = settings.refresh_minute
+    watch_hour, watch_minute = _shift_time(hour, minute, 5)
+    rating_hour, rating_minute = _shift_time(hour, minute, 10)
+    review_hour, review_minute = _shift_time(hour, minute, 20)
 
     scheduler.add_job(
         _sync_market_data,
@@ -53,7 +62,7 @@ def setup_scheduler():
 
     scheduler.add_job(
         _sync_watchlist_quotes,
-        CronTrigger(hour=hour, minute=minute + 5, day_of_week="mon-fri"),
+        CronTrigger(hour=watch_hour, minute=watch_minute, day_of_week="mon-fri"),
         id="sync_watchlist",
         name="同步自选股行情",
         replace_existing=True,
@@ -61,7 +70,7 @@ def setup_scheduler():
 
     scheduler.add_job(
         _run_watchlist_rating,
-        CronTrigger(hour=hour, minute=minute + 10, day_of_week="mon-fri"),
+        CronTrigger(hour=rating_hour, minute=rating_minute, day_of_week="mon-fri"),
         id="run_rating",
         name="自选股评级",
         replace_existing=True,
@@ -69,7 +78,7 @@ def setup_scheduler():
 
     scheduler.add_job(
         _run_daily_review,
-        CronTrigger(hour=hour, minute=minute + 20, day_of_week="mon-fri"),
+        CronTrigger(hour=review_hour, minute=review_minute, day_of_week="mon-fri"),
         id="run_review",
         name="每日复盘",
         replace_existing=True,
@@ -78,7 +87,7 @@ def setup_scheduler():
     scheduler.start()
     logger.info(
         "Scheduler started: market@%02d:%02d, news@hourly, watchlist@%02d:%02d, rating@%02d:%02d, review@%02d:%02d",
-        hour, minute, hour, minute + 5, hour, minute + 10, hour, minute + 20,
+        hour, minute, watch_hour, watch_minute, rating_hour, rating_minute, review_hour, review_minute,
     )
 
 
@@ -177,6 +186,7 @@ async def _run_daily_review():
         from app.models.sentiment import SentimentCycleLog
         from app.core.limit_up_tracker import get_limit_up_data
         from app.core.review_engine import generate_daily_review
+        from app.cache import cache_get
 
         today = date.today()
         async with async_session() as db:
@@ -189,20 +199,38 @@ async def _run_daily_review():
 
             limit_up_data = await get_limit_up_data()
 
+            market_overview = None
+            try:
+                cached = await cache_get("sr:market:overview")
+                if cached and isinstance(cached, dict):
+                    market_overview = cached
+            except Exception:
+                pass
+
             prev_stmt = select(SentimentCycleLog).order_by(desc(SentimentCycleLog.date)).limit(7)
             prev_result = await db.execute(prev_stmt)
             prev_rows = prev_result.scalars().all()
             prev_phases = [r.cycle_phase for r in reversed(prev_rows) if r.cycle_phase]
 
-            result = await generate_daily_review(limit_up_data, prev_phases=prev_phases)
+            result = await generate_daily_review(limit_up_data, market_overview, prev_phases)
+
+            leader = limit_up_data.get("market_leader") or {}
+            leader_name = ""
+            if isinstance(leader, dict):
+                leader_name = str(leader.get("name", "") or "")
+
+            cycle = result.get("cycle_result", {})
+            ai_reason = cycle.get("ai_reason", "") if isinstance(cycle, dict) else ""
 
             review_obj = DailyReview(
                 date=today,
                 market_sentiment=result.get("market_sentiment", ""),
                 market_height=result.get("market_height", 0),
+                market_leader=leader_name,
                 total_limit_up=result.get("total_limit_up", 0),
                 first_board_count=result.get("first_board_count", 0),
                 broken_board_count=result.get("broken_board_count", 0),
+                sentiment_detail=ai_reason,
                 main_sector=result.get("main_sector", ""),
                 sub_sector=result.get("sub_sector", ""),
                 broken_boards=result.get("broken_boards", ""),
@@ -210,10 +238,10 @@ async def _run_daily_review():
                 next_day_plan=result.get("next_day_plan", ""),
                 applicable_strategy=result.get("applicable_strategy", ""),
                 suggested_position=result.get("suggested_position", ""),
+                ai_review_draft=result.get("review_summary", ""),
+                ai_next_day_suggestion=result.get("next_day_plan", ""),
             )
             db.add(review_obj)
-
-            cycle = result.get("cycle_result", {})
             log = SentimentCycleLog(
                 date=today,
                 cycle_phase=cycle.get("phase", ""),
@@ -224,6 +252,6 @@ async def _run_daily_review():
             db.add(log)
             await db.commit()
 
-        logger.info("[Scheduler] Daily review completed: %s", cycle.get("phase", ""))
+            logger.info("[Scheduler] Daily review completed: %s", cycle.get("phase", ""))
     except Exception as e:
         logger.error("[Scheduler] Review task failed: %s", e)

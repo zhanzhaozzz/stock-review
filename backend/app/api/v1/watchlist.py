@@ -9,7 +9,7 @@ import logging
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select, delete, desc
+from sqlalchemy import select, delete, desc, and_, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db, async_session
@@ -282,6 +282,107 @@ async def watchlist_groups(db: AsyncSession = Depends(get_db)):
     )
     result = await db.execute(stmt)
     return [r[0] or "默认" for r in result.all()]
+
+
+@router.get("/analysis")
+async def watchlist_analysis(db: AsyncSession = Depends(get_db)):
+    """自选股批量分析摘要：汇总评级分布、涨跌统计、重点关注。"""
+    from app.models.rating import Rating
+    from app.models.stock import StockPrice
+
+    stmt = select(Watchlist).where(Watchlist.user_id == DEFAULT_USER_ID)
+    result = await db.execute(stmt)
+    stocks = result.scalars().all()
+
+    if not stocks:
+        return {"total": 0, "summary": "自选股为空"}
+
+    total = len(stocks)
+    codes = [w.code for w in stocks]
+
+    ratings_map: dict[str, Rating] = {}
+    latest_rating_subq = (
+        select(
+            Rating.code.label("code"),
+            func.max(Rating.date).label("max_date"),
+        )
+        .where(Rating.code.in_(codes))
+        .group_by(Rating.code)
+        .subquery()
+    )
+    rating_stmt = (
+        select(Rating)
+        .join(
+            latest_rating_subq,
+            and_(
+                Rating.code == latest_rating_subq.c.code,
+                Rating.date == latest_rating_subq.c.max_date,
+            ),
+        )
+        .order_by(desc(Rating.created_at))
+    )
+    rating_result = await db.execute(rating_stmt)
+    rating_rows = rating_result.scalars().all()
+    for r in rating_rows:
+        if r.code not in ratings_map:
+            ratings_map[r.code] = r
+
+    label_dist: dict[str, int] = {}
+    scored = []
+    for code, r in ratings_map.items():
+        label = r.rating or "未评级"
+        label_dist[label] = label_dist.get(label, 0) + 1
+        scored.append({"code": code, "name": r.name, "score": r.total_score or 0, "rating": label})
+
+    scored.sort(key=lambda x: x["score"], reverse=True)
+
+    latest_price_subq = (
+        select(
+            StockPrice.code.label("code"),
+            func.max(StockPrice.date).label("max_date"),
+        )
+        .where(StockPrice.code.in_(codes))
+        .group_by(StockPrice.code)
+        .subquery()
+    )
+    price_stmt = (
+        select(StockPrice)
+        .join(
+            latest_price_subq,
+            and_(
+                StockPrice.code == latest_price_subq.c.code,
+                StockPrice.date == latest_price_subq.c.max_date,
+            ),
+        )
+        .order_by(desc(StockPrice.id))
+    )
+    price_result = await db.execute(price_stmt)
+    price_rows = price_result.scalars().all()
+    price_map: dict[str, StockPrice] = {}
+    for sp in price_rows:
+        if sp.code not in price_map:
+            price_map[sp.code] = sp
+
+    up_count = 0
+    down_count = 0
+    for w in stocks:
+        sp = price_map.get(w.code)
+        if sp and sp.change_pct is not None:
+            if sp.change_pct > 0:
+                up_count += 1
+            elif sp.change_pct < 0:
+                down_count += 1
+
+    return {
+        "total": total,
+        "rated": len(ratings_map),
+        "label_distribution": label_dist,
+        "up_count": up_count,
+        "down_count": down_count,
+        "flat_count": total - up_count - down_count,
+        "top_rated": scored[:5],
+        "bottom_rated": scored[-3:] if len(scored) >= 3 else scored,
+    }
 
 
 @router.get("/search", response_model=list[StockSearchItem])

@@ -156,6 +156,51 @@ async def sentiment_log(
     ]
 
 
+@router.get("/sentiment/current")
+async def sentiment_current(db: AsyncSession = Depends(get_db)):
+    """当前（最新）情绪周期判断。"""
+    stmt = select(SentimentCycleLog).order_by(desc(SentimentCycleLog.date)).limit(1)
+    result = await db.execute(stmt)
+    latest = result.scalar_one_or_none()
+    if not latest:
+        return {"phase": "未知", "market_height": 0, "main_sector": "", "date": ""}
+    return {
+        "phase": latest.cycle_phase or "未知",
+        "market_height": latest.market_height or 0,
+        "main_sector": latest.main_sector or "",
+        "transition_note": latest.transition_note or "",
+        "date": str(latest.date),
+    }
+
+
+@router.get("/sentiment/transitions")
+async def sentiment_transitions(
+    limit: int = Query(30, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+):
+    """情绪周期转换记录（标注相邻两天的周期变化）。"""
+    stmt = select(SentimentCycleLog).order_by(desc(SentimentCycleLog.date)).limit(limit)
+    result = await db.execute(stmt)
+    rows = list(result.scalars().all())
+
+    transitions = []
+    for i, row in enumerate(rows):
+        prev_phase = rows[i + 1].cycle_phase if i + 1 < len(rows) else ""
+        current_phase = row.cycle_phase or ""
+        changed = prev_phase != current_phase and prev_phase != ""
+        transitions.append({
+            "date": str(row.date),
+            "phase": current_phase,
+            "prev_phase": prev_phase,
+            "changed": changed,
+            "transition": f"{prev_phase} → {current_phase}" if changed else "",
+            "market_height": row.market_height or 0,
+            "main_sector": row.main_sector or "",
+            "note": row.transition_note or "",
+        })
+    return transitions
+
+
 @router.get("/{review_id}", response_model=DailyReviewItem)
 async def get_review(review_id: int, db: AsyncSession = Depends(get_db)):
     """单次复盘详情。"""
