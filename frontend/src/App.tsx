@@ -5,7 +5,8 @@ import RatingBoard from "./pages/RatingBoard";
 import Watchlist from "./pages/Watchlist";
 import News from "./pages/News";
 import StockDetail from "./pages/StockDetail";
-import Review from "./pages/Review";
+import DailyReview from "./pages/DailyReview";
+import ReviewHistory from "./pages/ReviewHistory";
 import Strategies from "./pages/Strategies";
 import Operations from "./pages/Operations";
 import Settings from "./pages/Settings";
@@ -20,8 +21,8 @@ export default function App() {
           <Route path="ratings" element={<RatingBoard />} />
           <Route path="watchlist" element={<Watchlist />} />
           <Route path="news" element={<News />} />
-          <Route path="review" element={<Review />} />
-          <Route path="review/history" element={<Review />} />
+          <Route path="review" element={<DailyReview />} />
+          <Route path="review/history" element={<ReviewHistory />} />
           <Route path="strategies" element={<Strategies />} />
           <Route path="operations" element={<Operations />} />
           <Route path="stock/:code" element={<StockDetail />} />

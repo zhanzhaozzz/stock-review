@@ -65,6 +65,7 @@ async def sync_watchlist_quotes():
     mgr = get_data_manager()
     today = date.today()
     synced = 0
+    write_lock = asyncio.Lock()
 
     async def _fetch_and_save(code: str):
         nonlocal synced
@@ -74,43 +75,44 @@ async def sync_watchlist_quotes():
                 return
             await cache_set(f"sr:quote:{code}", quote, ttl=60)
 
-            async with async_session() as session:
-                existing = await session.execute(
-                    select(StockPrice.id)
-                    .where(StockPrice.code == code, StockPrice.date == today)
-                    .limit(1)
-                )
-                row = existing.scalar_one_or_none()
-                if row:
-                    await session.execute(
-                        select(StockPrice)
-                        .where(StockPrice.id == row)
+            async with write_lock:
+                async with async_session() as session:
+                    existing = await session.execute(
+                        select(StockPrice.id)
+                        .where(StockPrice.code == code, StockPrice.date == today)
+                        .limit(1)
                     )
-                    sp = (await session.execute(
-                        select(StockPrice).where(StockPrice.id == row)
-                    )).scalar_one()
-                    sp.close = quote.get("price")
-                    sp.open = quote.get("open", sp.open)
-                    sp.high = quote.get("high", sp.high)
-                    sp.low = quote.get("low", sp.low)
-                    sp.volume = quote.get("volume")
-                    sp.turnover = quote.get("turnover")
-                    sp.change_pct = quote.get("change_pct")
-                else:
-                    sp = StockPrice(
-                        code=code,
-                        date=today,
-                        open=quote.get("open"),
-                        high=quote.get("high"),
-                        low=quote.get("low"),
-                        close=quote.get("price"),
-                        volume=quote.get("volume"),
-                        turnover=quote.get("turnover"),
-                        change_pct=quote.get("change_pct"),
-                    )
-                    session.add(sp)
-                await session.commit()
-                synced += 1
+                    row = existing.scalar_one_or_none()
+                    if row:
+                        await session.execute(
+                            select(StockPrice)
+                            .where(StockPrice.id == row)
+                        )
+                        sp = (await session.execute(
+                            select(StockPrice).where(StockPrice.id == row)
+                        )).scalar_one()
+                        sp.close = quote.get("price")
+                        sp.open = quote.get("open", sp.open)
+                        sp.high = quote.get("high", sp.high)
+                        sp.low = quote.get("low", sp.low)
+                        sp.volume = quote.get("volume")
+                        sp.turnover = quote.get("turnover")
+                        sp.change_pct = quote.get("change_pct")
+                    else:
+                        sp = StockPrice(
+                            code=code,
+                            date=today,
+                            open=quote.get("open"),
+                            high=quote.get("high"),
+                            low=quote.get("low"),
+                            close=quote.get("price"),
+                            volume=quote.get("volume"),
+                            turnover=quote.get("turnover"),
+                            change_pct=quote.get("change_pct"),
+                        )
+                        session.add(sp)
+                    await session.commit()
+                    synced += 1
         except Exception as e:
             logger.debug("Quote sync failed for %s: %s", code, e)
 

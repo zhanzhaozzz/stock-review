@@ -42,16 +42,15 @@ async def _upsert_snapshot(session, snapshot_type: str, data):
 
 @router.post("/all")
 async def sync_all():
-    """一键同步：并行采集市场+新闻+自选股行情 → 全部落库。"""
-    market_task = asyncio.create_task(_sync_market())
-    news_task = asyncio.create_task(_sync_news())
-    quotes_task = asyncio.create_task(_sync_watchlist_quotes())
+    """一键同步：串行采集市场+新闻+自选股行情 → 全部落库。
 
-    results = {
-        "market": await market_task,
-        "news": await news_task,
-        "watchlist_quotes": await quotes_task,
-    }
+    SQLite 不支持并发写入，并行 session 会导致 database is locked，
+    因此改为串行执行；数据采集（网络 IO）仍在各函数内部并行。
+    """
+    results = {}
+    results["market"] = await _sync_market()
+    results["news"] = await _sync_news()
+    results["watchlist_quotes"] = await _sync_watchlist_quotes()
     return results
 
 
@@ -89,6 +88,7 @@ async def _sync_market() -> dict:
                 refreshed.append("overview")
         except Exception as e:
             logger.warning("Market overview sync failed: %s", e)
+            await session.rollback()
 
         try:
             from app.core.market_review import get_sector_ranking
@@ -99,6 +99,7 @@ async def _sync_market() -> dict:
                 refreshed.append("sectors_concept")
         except Exception as e:
             logger.warning("Sector concept sync failed: %s", e)
+            await session.rollback()
 
         try:
             from app.core.market_review import get_sector_ranking
@@ -109,6 +110,7 @@ async def _sync_market() -> dict:
                 refreshed.append("sectors_industry")
         except Exception as e:
             logger.warning("Sector industry sync failed: %s", e)
+            await session.rollback()
 
         try:
             from app.core.market_review import get_money_flow
@@ -119,6 +121,7 @@ async def _sync_market() -> dict:
                 refreshed.append("money_flow")
         except Exception as e:
             logger.warning("Money flow sync failed: %s", e)
+            await session.rollback()
 
         try:
             from app.core.limit_up_tracker import get_limit_up_data
@@ -129,8 +132,13 @@ async def _sync_market() -> dict:
                 refreshed.append("limit_up")
         except Exception as e:
             logger.warning("Limit up sync failed: %s", e)
+            await session.rollback()
 
-        await session.commit()
+        try:
+            await session.commit()
+        except Exception as e:
+            await session.rollback()
+            logger.warning("Market sync commit failed: %s", e)
 
     logger.info("Market sync done: %s", refreshed)
     return {"status": "ok", "refreshed": refreshed}

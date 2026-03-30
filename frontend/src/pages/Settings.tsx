@@ -1,14 +1,20 @@
 import { useEffect, useState } from "react";
 import api from "../api/client";
+import { useAppStore } from "../stores/useAppStore";
 
 export default function Settings() {
   const [health, setHealth] = useState<{ status: string; app: string } | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState("");
+  const { cyclePhase, suggestedPosition, matchedStrategies, loadingRecommend, refreshRecommend } = useAppStore();
 
   useEffect(() => {
     api.get("/health").then((r) => setHealth(r.data)).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    refreshRecommend();
+  }, [refreshRecommend]);
 
   async function handleSyncAll() {
     setSyncing(true);
@@ -86,6 +92,27 @@ export default function Settings() {
           <div className="flex items-center gap-3">
             <span className="font-mono text-xs bg-gray-800 px-2 py-0.5 rounded">15:50</span>
             <span>每日复盘</span>
+          </div>
+        </div>
+      </div>
+
+      {/* 今日推荐 */}
+      <div className="bg-gray-900 rounded-xl p-5 border border-gray-800">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-semibold text-gray-400">今日推荐（情绪周期→战法）</h3>
+          <button
+            onClick={refreshRecommend}
+            disabled={loadingRecommend}
+            className="px-3 py-1 text-xs bg-gray-800 hover:bg-gray-700 disabled:opacity-50 rounded-lg"
+          >
+            {loadingRecommend ? "刷新中..." : "刷新"}
+          </button>
+        </div>
+        <div className="text-sm text-gray-400 space-y-2">
+          <div>当前情绪: <span className="text-gray-200 font-medium">{cyclePhase || "—"}</span></div>
+          <div>建议仓位: <span className="text-gray-200 font-medium">{suggestedPosition || "—"}</span></div>
+          <div className="text-xs text-gray-500">
+            适用战法: {matchedStrategies.length ? matchedStrategies.join("、") : "—"}
           </div>
         </div>
       </div>

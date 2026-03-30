@@ -1,0 +1,22 @@
+feat: Sprint 3 完成 — AI分析流水线 + 情绪周期复盘体系 + 定时任务 + 前端全页面
+
+后端新增:
+- AI分析流水线: stock_analyzer 技术面规则引擎 + analysis_pipeline 端到端分析
+- 情绪周期复盘: review_engine 复盘引擎 + sentiment_engine 情绪周期判断
+- 定时任务: scheduler APScheduler 收盘后自动刷新+评级+复盘
+- API路由: analysis/review/strategy/operations 四个模块路由注册
+- Schema: analysis/review/sentiment/strategy Pydantic 模型
+- LLM提示词: analysis 分析报告提示词模板
+
+前端新增:
+- Review 每日复盘页(列表+详情)
+- StockDetail 个股AI分析页
+- Strategies 战法库CRUD页
+- Operations 操作记录+统计页
+- Settings 系统设置页(健康检查+数据同步)
+
+修复四个对齐问题:
+- DailyReview ORM字段与API/Schema/前端对齐(market_sentiment等)
+- Scheduler调用sync函数去掉多余db参数 + WatchlistItem改为Watchlist
+- 前端路由补充/review/history注册
+- 健康检查端点添加到/api/v1/health路径

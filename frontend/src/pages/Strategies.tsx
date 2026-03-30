@@ -21,12 +21,17 @@ export default function Strategies() {
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<Partial<StrategyItem> | null>(null);
   const [saving, setSaving] = useState(false);
+  const [recommend, setRecommend] = useState<any>(null);
 
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await api.get("/strategies/list");
-      setStrategies(res.data || []);
+      const [listRes, recRes] = await Promise.allSettled([
+        api.get("/strategies/list"),
+        api.get("/strategies/recommend"),
+      ]);
+      if (listRes.status === "fulfilled") setStrategies(listRes.value.data || []);
+      if (recRes.status === "fulfilled") setRecommend(recRes.value.data);
     } finally {
       setLoading(false);
     }
@@ -88,6 +93,22 @@ export default function Strategies() {
           新增战法
         </button>
       </div>
+
+      {recommend && (
+        <div className="bg-gray-900 rounded-xl p-5 border border-gray-800">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-sm font-semibold">当前情绪: {recommend.cycle_phase || "—"}</div>
+              <div className="text-xs text-gray-500 mt-1">
+                建议仓位: {recommend.suggested_position || "—"} · 匹配 {recommend.total_matched || 0} 条战法
+              </div>
+            </div>
+            <div className="text-xs text-gray-500 max-w-[50%] truncate">
+              {recommend.caution || ""}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 编辑弹窗 */}
       {editing && (
@@ -160,7 +181,14 @@ export default function Strategies() {
       ) : (
         <div className="space-y-4">
           {strategies.map((s) => (
-            <div key={s.id} className="bg-gray-900 rounded-xl p-5 border border-gray-800">
+            <div
+              key={s.id}
+              className={`bg-gray-900 rounded-xl p-5 border ${
+                recommend?.matched_strategies?.some((m: any) => m.name === s.name)
+                  ? "border-blue-500/50 bg-blue-500/5"
+                  : "border-gray-800"
+              }`}
+            >
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-3">
                   <h3 className="text-base font-semibold">{s.name}</h3>
@@ -171,6 +199,11 @@ export default function Strategies() {
                       </span>
                     ))}
                   </div>
+                  {recommend?.matched_strategies?.some((m: any) => m.name === s.name) && (
+                    <span className="text-xs px-2 py-0.5 rounded bg-blue-500/15 text-blue-300 border border-blue-500/30">
+                      当前适用
+                    </span>
+                  )}
                 </div>
                 <div className="flex gap-2">
                   <button

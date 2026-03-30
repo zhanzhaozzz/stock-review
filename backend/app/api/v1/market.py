@@ -18,6 +18,7 @@ from app.cache import cache_get, cache_set
 from app.database import get_db
 from app.models.market import MarketSnapshot
 from app.data_provider.manager import get_data_manager
+from app.models.stock import StockPrice
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -165,3 +166,93 @@ async def stock_quote(code: str):
         await cache_set(cache_key, quote, ttl=30)
         return quote
     return {"error": "Quote not available", "code": code}
+
+
+@router.get("/stock/{code}/daily")
+async def stock_daily_history(
+    code: str,
+    days: int = Query(90, ge=10, le=240),
+    db: AsyncSession = Depends(get_db),
+):
+    """个股日线历史（优先 SQLite，不足则外部拉取并补齐落库）。"""
+    stmt = (
+        select(StockPrice)
+        .where(StockPrice.code == code)
+        .order_by(desc(StockPrice.date))
+        .limit(days)
+    )
+    result = await db.execute(stmt)
+    rows = result.scalars().all()
+
+    if len(rows) >= min(30, days):
+        data = [
+            {
+                "date": str(r.date),
+                "open": r.open,
+                "high": r.high,
+                "low": r.low,
+                "close": r.close,
+                "volume": r.volume,
+                "turnover": r.turnover,
+                "change_pct": r.change_pct,
+            }
+            for r in reversed(rows)
+        ]
+        return {"code": code, "days": len(data), "data": data, "source": "sqlite"}
+
+    mgr = get_data_manager()
+    df = await _with_timeout(mgr.get_daily(code, days), fallback=None)
+    if df is None or df.empty:
+        data = [
+            {
+                "date": str(r.date),
+                "open": r.open,
+                "high": r.high,
+                "low": r.low,
+                "close": r.close,
+                "volume": r.volume,
+                "turnover": r.turnover,
+                "change_pct": r.change_pct,
+            }
+            for r in reversed(rows)
+        ]
+        return {"code": code, "days": len(data), "data": data, "source": "sqlite_partial"}
+
+    records = df.to_dict(orient="records")
+    for r in records:
+        if "date" in r:
+            r["date"] = str(r["date"])
+
+    existing = await db.execute(
+        select(StockPrice).where(StockPrice.code == code)
+    )
+    existing_rows = existing.scalars().all()
+    existing_map = {str(x.date): x for x in existing_rows}
+
+    for rec in records:
+        d = rec.get("date")
+        if not d:
+            continue
+        row = existing_map.get(d)
+        if row:
+            row.open = rec.get("open")
+            row.high = rec.get("high")
+            row.low = rec.get("low")
+            row.close = rec.get("close")
+            row.volume = rec.get("volume")
+            row.turnover = rec.get("turnover")
+            row.change_pct = rec.get("change_pct")
+        else:
+            db.add(StockPrice(
+                code=code,
+                date=date.fromisoformat(d),
+                open=rec.get("open"),
+                high=rec.get("high"),
+                low=rec.get("low"),
+                close=rec.get("close"),
+                volume=rec.get("volume"),
+                turnover=rec.get("turnover"),
+                change_pct=rec.get("change_pct"),
+            ))
+    await db.commit()
+    return {"code": code, "days": len(records), "data": records, "source": "external+sqlite"}

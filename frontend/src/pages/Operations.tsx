@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import api from "../api/client";
 import { getPctColor, formatPct } from "../utils/stockColor";
+import WinRatePie from "../components/charts/WinRatePie";
 
 interface OperationItem {
   id: number;
@@ -21,6 +22,8 @@ interface Stats {
   avg_pnl: number;
   total_pnl: number;
   correct_rate: number;
+  by_strategy?: { strategy: string; total: number; win_rate: number; avg_pnl: number }[];
+  by_cycle?: { cycle: string; total: number; win_rate: number; avg_pnl: number }[];
 }
 
 export default function Operations() {
@@ -94,34 +97,82 @@ export default function Operations() {
 
       {/* 统计卡片 */}
       {stats && stats.total > 0 && (
-        <div className="grid grid-cols-5 gap-4">
-          <div className="bg-gray-900 rounded-xl p-4 border border-gray-800 text-center">
-            <div className="text-2xl font-bold">{stats.total}</div>
-            <div className="text-xs text-gray-500">总操作</div>
-          </div>
-          <div className="bg-gray-900 rounded-xl p-4 border border-gray-800 text-center">
-            <div className={`text-2xl font-bold ${stats.win_rate >= 50 ? "text-up" : "text-down"}`}>
-              {stats.win_rate}%
+        <>
+          <div className="grid grid-cols-5 gap-4">
+            <div className="bg-gray-900 rounded-xl p-4 border border-gray-800 text-center">
+              <div className="text-2xl font-bold">{stats.total}</div>
+              <div className="text-xs text-gray-500">总操作</div>
             </div>
-            <div className="text-xs text-gray-500">胜率</div>
-          </div>
-          <div className="bg-gray-900 rounded-xl p-4 border border-gray-800 text-center">
-            <div className={`text-2xl font-bold ${stats.avg_pnl >= 0 ? "text-up" : "text-down"}`}>
-              {stats.avg_pnl >= 0 ? "+" : ""}{stats.avg_pnl}%
+            <div className="bg-gray-900 rounded-xl p-4 border border-gray-800 text-center">
+              <div className={`text-2xl font-bold ${stats.win_rate >= 50 ? "text-up" : "text-down"}`}>
+                {stats.win_rate}%
+              </div>
+              <div className="text-xs text-gray-500">胜率</div>
             </div>
-            <div className="text-xs text-gray-500">平均盈亏</div>
-          </div>
-          <div className="bg-gray-900 rounded-xl p-4 border border-gray-800 text-center">
-            <div className={`text-2xl font-bold ${stats.total_pnl >= 0 ? "text-up" : "text-down"}`}>
-              {stats.total_pnl >= 0 ? "+" : ""}{stats.total_pnl}%
+            <div className="bg-gray-900 rounded-xl p-4 border border-gray-800 text-center">
+              <div className={`text-2xl font-bold ${stats.avg_pnl >= 0 ? "text-up" : "text-down"}`}>
+                {stats.avg_pnl >= 0 ? "+" : ""}{stats.avg_pnl}%
+              </div>
+              <div className="text-xs text-gray-500">平均盈亏</div>
             </div>
-            <div className="text-xs text-gray-500">累计盈亏</div>
+            <div className="bg-gray-900 rounded-xl p-4 border border-gray-800 text-center">
+              <div className={`text-2xl font-bold ${stats.total_pnl >= 0 ? "text-up" : "text-down"}`}>
+                {stats.total_pnl >= 0 ? "+" : ""}{stats.total_pnl}%
+              </div>
+              <div className="text-xs text-gray-500">累计盈亏</div>
+            </div>
+            <div className="bg-gray-900 rounded-xl p-4 border border-gray-800 text-center">
+              <div className="text-2xl font-bold">{stats.correct_rate}%</div>
+              <div className="text-xs text-gray-500">正确率</div>
+            </div>
           </div>
-          <div className="bg-gray-900 rounded-xl p-4 border border-gray-800 text-center">
-            <div className="text-2xl font-bold">{stats.correct_rate}%</div>
-            <div className="text-xs text-gray-500">正确率</div>
+
+          <div className="grid grid-cols-3 gap-4">
+            <div className="bg-gray-900 rounded-xl p-4 border border-gray-800">
+              <h3 className="text-sm font-semibold text-gray-400 mb-2">胜率结构</h3>
+              <WinRatePie
+                wins={Math.round((stats.win_rate / 100) * stats.total)}
+                losses={stats.total - Math.round((stats.win_rate / 100) * stats.total)}
+                size={220}
+              />
+            </div>
+            <div className="bg-gray-900 rounded-xl p-4 border border-gray-800 col-span-2">
+              <h3 className="text-sm font-semibold text-gray-400 mb-3">按战法统计</h3>
+              <div className="grid grid-cols-3 gap-3 text-sm">
+                {(stats.by_strategy || []).slice(0, 9).map((s) => (
+                  <div key={s.strategy} className="bg-gray-950 border border-gray-800 rounded-lg p-3">
+                    <div className="text-xs text-gray-500 mb-1 truncate">{s.strategy}</div>
+                    <div className="text-sm">
+                      胜率 <span className={s.win_rate >= 50 ? "text-up" : "text-down"}>{s.win_rate}%</span>
+                    </div>
+                    <div className="text-xs text-gray-500">样本 {s.total} · 均值 {s.avg_pnl}%</div>
+                  </div>
+                ))}
+              </div>
+              {(!stats.by_strategy || stats.by_strategy.length === 0) && (
+                <div className="text-gray-500 text-center py-10">暂无按战法统计</div>
+              )}
+            </div>
           </div>
-        </div>
+
+          <div className="bg-gray-900 rounded-xl p-5 border border-gray-800">
+            <h3 className="text-sm font-semibold text-gray-400 mb-3">按情绪周期统计</h3>
+            <div className="grid grid-cols-4 gap-3 text-sm">
+              {(stats.by_cycle || []).slice(0, 12).map((c) => (
+                <div key={c.cycle} className="bg-gray-950 border border-gray-800 rounded-lg p-3">
+                  <div className="text-xs text-gray-500 mb-1">{c.cycle}</div>
+                  <div className="text-sm">
+                    胜率 <span className={c.win_rate >= 50 ? "text-up" : "text-down"}>{c.win_rate}%</span>
+                  </div>
+                  <div className="text-xs text-gray-500">样本 {c.total} · 均值 {c.avg_pnl}%</div>
+                </div>
+              ))}
+            </div>
+            {(!stats.by_cycle || stats.by_cycle.length === 0) && (
+              <div className="text-gray-500 text-center py-10">暂无按周期统计（需要先有情绪周期日志）</div>
+            )}
+          </div>
+        </>
       )}
 
       {/* 编辑表单 */}

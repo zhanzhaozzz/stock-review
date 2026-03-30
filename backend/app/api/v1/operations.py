@@ -95,7 +95,7 @@ async def operation_stats(db: AsyncSession = Depends(get_db)):
     rows = result.scalars().all()
 
     if not rows:
-        return {"total": 0, "win_rate": 0, "avg_pnl": 0, "total_pnl": 0}
+        return {"total": 0, "win_rate": 0, "avg_pnl": 0, "total_pnl": 0, "correct_rate": 0, "by_strategy": [], "by_cycle": []}
 
     total = len(rows)
     wins = sum(1 for r in rows if r.pnl_pct and r.pnl_pct > 0)
@@ -105,12 +105,59 @@ async def operation_stats(db: AsyncSession = Depends(get_db)):
     correct_count = sum(1 for r in rows if r.is_correct)
     correct_rate = correct_count / total * 100 if total else 0
 
+    by_strategy: dict[str, list[float]] = {}
+    for r in rows:
+        key = (r.strategy_used or "未填写").strip() or "未填写"
+        by_strategy.setdefault(key, []).append(r.pnl_pct or 0)
+
+    strategy_stats = []
+    for k, vals in by_strategy.items():
+        t = len(vals)
+        w = sum(1 for v in vals if v > 0)
+        strategy_stats.append({
+            "strategy": k,
+            "total": t,
+            "win_rate": round(w / t * 100, 1) if t else 0,
+            "avg_pnl": round(sum(vals) / t, 2) if t else 0,
+        })
+    strategy_stats.sort(key=lambda x: (x["total"], x["win_rate"]), reverse=True)
+
+    cycle_map: dict[str, str] = {}
+    try:
+        from app.models.sentiment import SentimentCycleLog
+        stmt2 = select(SentimentCycleLog)
+        r2 = await db.execute(stmt2)
+        logs = r2.scalars().all()
+        for l in logs:
+            cycle_map[str(l.date)] = l.cycle_phase or ""
+    except Exception:
+        cycle_map = {}
+
+    by_cycle: dict[str, list[float]] = {}
+    for r in rows:
+        phase = cycle_map.get(str(r.date), "") or "未知"
+        by_cycle.setdefault(phase, []).append(r.pnl_pct or 0)
+
+    cycle_stats = []
+    for k, vals in by_cycle.items():
+        t = len(vals)
+        w = sum(1 for v in vals if v > 0)
+        cycle_stats.append({
+            "cycle": k,
+            "total": t,
+            "win_rate": round(w / t * 100, 1) if t else 0,
+            "avg_pnl": round(sum(vals) / t, 2) if t else 0,
+        })
+    cycle_stats.sort(key=lambda x: x["total"], reverse=True)
+
     return {
         "total": total,
         "win_rate": round(wins / total * 100, 1) if total else 0,
         "avg_pnl": round(avg_pnl, 2),
         "total_pnl": round(total_pnl, 2),
         "correct_rate": round(correct_rate, 1),
+        "by_strategy": strategy_stats,
+        "by_cycle": cycle_stats,
     }
 
 

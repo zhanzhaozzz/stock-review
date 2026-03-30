@@ -59,13 +59,23 @@ async def run_review(db: AsyncSession = Depends(get_db)):
 
     result = await generate_daily_review(limit_up_data, market_overview, prev_phases)
 
+    leader = limit_up_data.get("market_leader") or {}
+    leader_name = ""
+    if isinstance(leader, dict):
+        leader_name = str(leader.get("name", "") or "")
+
+    cycle = result.get("cycle_result", {})
+    ai_reason = cycle.get("ai_reason", "") if isinstance(cycle, dict) else ""
+
     review_obj = DailyReview(
         date=today,
         market_sentiment=result.get("market_sentiment", ""),
         market_height=result.get("market_height", 0),
+        market_leader=leader_name,
         total_limit_up=result.get("total_limit_up", 0),
         first_board_count=result.get("first_board_count", 0),
         broken_board_count=result.get("broken_board_count", 0),
+        sentiment_detail=ai_reason,
         main_sector=result.get("main_sector", ""),
         sub_sector=result.get("sub_sector", ""),
         broken_boards=result.get("broken_boards", ""),
@@ -73,10 +83,11 @@ async def run_review(db: AsyncSession = Depends(get_db)):
         next_day_plan=result.get("next_day_plan", ""),
         applicable_strategy=result.get("applicable_strategy", ""),
         suggested_position=result.get("suggested_position", ""),
+        ai_review_draft=result.get("review_summary", ""),
+        ai_next_day_suggestion=result.get("next_day_plan", ""),
     )
     db.add(review_obj)
 
-    cycle = result.get("cycle_result", {})
     sentiment_log = SentimentCycleLog(
         date=today,
         cycle_phase=cycle.get("phase", ""),
@@ -91,6 +102,24 @@ async def run_review(db: AsyncSession = Depends(get_db)):
     await db.commit()
 
     return {"message": "复盘已生成", "date": str(today), "sentiment": cycle.get("phase", "")}
+
+
+@router.post("/generate")
+async def generate_review(db: AsyncSession = Depends(get_db)):
+    """兼容计划文档：/generate 等价于 /run。"""
+    return await run_review(db)
+
+
+@router.get("/today", response_model=DailyReviewItem)
+async def today_review(db: AsyncSession = Depends(get_db)):
+    """获取今日复盘（不存在则 404）。"""
+    today = date.today()
+    stmt = select(DailyReview).where(DailyReview.date == today).limit(1)
+    result = await db.execute(stmt)
+    r = result.scalar_one_or_none()
+    if not r:
+        raise HTTPException(status_code=404, detail="今日复盘不存在")
+    return _to_review_item(r)
 
 
 @router.get("/list", response_model=list[DailyReviewItem])
@@ -164,15 +193,21 @@ def _to_review_item(r: DailyReview) -> DailyReviewItem:
         date=str(r.date),
         market_sentiment=r.market_sentiment or "",
         market_height=r.market_height or 0,
+        market_leader=r.market_leader or "",
         total_limit_up=r.total_limit_up or 0,
         first_board_count=r.first_board_count or 0,
         broken_board_count=r.broken_board_count or 0,
+        sentiment_detail=r.sentiment_detail or "",
         main_sector=r.main_sector or "",
         sub_sector=r.sub_sector or "",
         review_summary=r.review_summary or "",
         next_day_plan=r.next_day_plan or "",
         applicable_strategy=r.applicable_strategy or "",
         suggested_position=r.suggested_position or "",
+        ai_review_draft=r.ai_review_draft or "",
+        ai_next_day_suggestion=r.ai_next_day_suggestion or "",
+        market_action=r.market_action or "",
+        market_result=r.market_result or "",
         is_confirmed=r.is_confirmed or False,
         created_at=r.created_at.isoformat() if r.created_at else "",
     )

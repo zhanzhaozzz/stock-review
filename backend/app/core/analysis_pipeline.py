@@ -85,7 +85,10 @@ async def analyze_stock(
     parsed["code"] = code
     parsed["name"] = name
     parsed["market"] = market
-    parsed["raw_result"] = raw
+    try:
+        parsed["raw_result"] = json.dumps(parsed, ensure_ascii=False)
+    except Exception:
+        parsed["raw_result"] = raw
     parsed["technical"] = technical.to_context()
 
     if fund_data:

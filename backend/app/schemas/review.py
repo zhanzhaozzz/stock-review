@@ -13,15 +13,21 @@ class DailyReviewItem(BaseModel):
     date: str
     market_sentiment: str = ""
     market_height: int = 0
+    market_leader: str = ""
     total_limit_up: int = 0
     first_board_count: int = 0
     broken_board_count: int = 0
+    sentiment_detail: str = ""
     main_sector: str = ""
     sub_sector: str = ""
     review_summary: str = ""
     next_day_plan: str = ""
     applicable_strategy: str = ""
     suggested_position: str = ""
+    ai_review_draft: str = ""
+    ai_next_day_suggestion: str = ""
+    market_action: str = ""
+    market_result: str = ""
     is_confirmed: bool = False
     created_at: str = ""
 

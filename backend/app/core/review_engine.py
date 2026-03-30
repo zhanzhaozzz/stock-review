@@ -124,29 +124,36 @@ async def _generate_review_summary(
     broken_boards: list,
 ) -> tuple[str, str]:
     """LLM 生成复盘总结和次日计划。"""
-    parts = [
-        f"情绪周期: {cycle.get('phase', '未知')} (置信度{cycle.get('confidence', 0)}%)",
-        f"市场高度: {cycle.get('height', 0)}板",
-        f"涨停数: {cycle.get('total_limit_up', 0)}, 首板: {cycle.get('first_board_count', 0)}, 炸板: {cycle.get('broken_count', 0)}",
-        f"主线板块: {', '.join(main_sectors[:3]) if main_sectors else '不明确'}",
-        f"炸板: {len(broken_boards)}只",
-    ]
-    if cycle.get("ai_reason"):
-        parts.append(f"AI判断: {cycle['ai_reason']}")
+    from app.llm.prompts.review import REVIEW_SYSTEM_PROMPT, build_review_prompt
 
     leader = limit_up_data.get("market_leader")
+    leader_info = ""
     if leader:
-        parts.append(f"龙头: {leader.get('name', '')}({leader.get('board_count', 0)}板)")
+        leader_info = f"{leader.get('name', '')}({leader.get('board_count', 0)}板)"
 
-    prompt = f"""请根据以下数据生成简洁的每日复盘总结和次日操作计划。
-
-{chr(10).join(parts)}
-
-请输出 JSON（不要输出其他内容）:
-{{"summary": "<200字复盘总结>", "plan": "<100字次日操作计划>"}}"""
+    prompt = build_review_prompt(
+        cycle_phase=cycle.get("phase", "未知"),
+        confidence=cycle.get("confidence", 0),
+        market_height=cycle.get("height", 0),
+        total_limit_up=cycle.get("total_limit_up", 0),
+        first_board_count=cycle.get("first_board_count", 0),
+        broken_count=cycle.get("broken_count", 0),
+        main_sectors=", ".join(main_sectors[:3]) if main_sectors else "",
+        sub_sectors="",
+        leader_info=leader_info,
+        prev_phases="",
+        matched_strategies=_recommend_strategy(cycle.get("phase", "震荡")),
+        market_overview_summary="",
+    )
 
     settings = get_settings()
-    raw = await chat(model=settings.utility_llm_model or "zhipu/glm-4-flash", prompt=prompt, temperature=0.3, timeout=60)
+    raw = await chat(
+        model=settings.utility_llm_model or "zhipu/glm-4-flash",
+        prompt=prompt,
+        system=REVIEW_SYSTEM_PROMPT,
+        temperature=0.3,
+        timeout=60,
+    )
     if raw:
         import re
         match = re.search(r"\{[\s\S]*?\}", raw)

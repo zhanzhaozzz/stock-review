@@ -1,6 +1,8 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams } from "react-router-dom";
 import api from "../api/client";
+import RadarChart from "../components/charts/RadarChart";
+import MiniKLine from "../components/charts/MiniKLine";
 
 interface AnalysisResult {
   code: string;
@@ -41,10 +43,20 @@ interface RatingInfo {
   reason: string;
 }
 
+interface KLinePoint {
+  date: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+}
+
 export default function StockDetail() {
   const { code } = useParams<{ code: string }>();
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
   const [rating, setRating] = useState<RatingInfo | null>(null);
+  const [kline, setKline] = useState<KLinePoint[]>([]);
   const [loading, setLoading] = useState(true);
   const [analyzing, setAnalyzing] = useState(false);
 
@@ -52,9 +64,10 @@ export default function StockDetail() {
     if (!code) return;
     setLoading(true);
     try {
-      const [analysisRes, ratingRes] = await Promise.allSettled([
+      const [analysisRes, ratingRes, kRes] = await Promise.allSettled([
         api.get(`/analysis/history?code=${code}&limit=1`),
         api.get(`/ratings/history/${code}?limit=1`),
+        api.get(`/market/stock/${code}/daily?days=90`),
       ]);
       if (analysisRes.status === "fulfilled" && analysisRes.value.data?.length > 0) {
         const latest = analysisRes.value.data[0];
@@ -83,6 +96,9 @@ export default function StockDetail() {
       }
       if (ratingRes.status === "fulfilled" && ratingRes.value.data?.length > 0) {
         setRating(ratingRes.value.data[0]);
+      }
+      if (kRes.status === "fulfilled") {
+        setKline((kRes.value.data?.data || []) as KLinePoint[]);
       }
     } catch {
       /* ignore */
@@ -139,6 +155,30 @@ export default function StockDetail() {
         </div>
       ) : (
         <>
+          {/* K线 + 雷达 */}
+          {rating && (
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-gray-900 rounded-xl p-5 border border-gray-800">
+                <h3 className="text-sm font-semibold text-gray-400 mb-3">近90日收盘走势</h3>
+                <MiniKLine data={kline} height={260} />
+              </div>
+              <div className="bg-gray-900 rounded-xl p-5 border border-gray-800">
+                <h3 className="text-sm font-semibold text-gray-400 mb-3">六维评分雷达图</h3>
+                <RadarChart
+                  data={[
+                    { label: "趋势", value: rating.trend_score || 0 },
+                    { label: "动量", value: rating.momentum_score || 0 },
+                    { label: "波动", value: rating.volatility_score || 0 },
+                    { label: "成交量", value: rating.volume_score || 0 },
+                    { label: "价值", value: rating.value_score || 0 },
+                    { label: "情绪", value: rating.sentiment_score || 0 },
+                  ]}
+                  size={260}
+                />
+              </div>
+            </div>
+          )}
+
           {/* 评级概览 */}
           {rating && (
             <div className="bg-gray-900 rounded-xl p-5 border border-gray-800">
