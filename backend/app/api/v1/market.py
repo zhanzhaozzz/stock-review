@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.cache import cache_get, cache_set
 from app.database import get_db
 from app.models.market import MarketSnapshot
+from app.models.fundamental import StockFundamental
 from app.data_provider.manager import get_data_manager
 from app.models.stock import StockPrice
 
@@ -256,3 +257,44 @@ async def stock_daily_history(
             ))
     await db.commit()
     return {"code": code, "days": len(records), "data": records, "source": "external+sqlite"}
+
+
+@router.get("/fundamental/{code}")
+async def stock_fundamental(code: str, db: AsyncSession = Depends(get_db)):
+    """返回个股最新基本面快照（来自 stock_fundamentals 表）。"""
+    stmt = (
+        select(StockFundamental)
+        .where(StockFundamental.code == code)
+        .order_by(desc(StockFundamental.date))
+        .limit(1)
+    )
+    result = await db.execute(stmt)
+    row = result.scalar_one_or_none()
+
+    if not row:
+        return {"code": code, "data": None, "_hint": "请先同步基本面数据 POST /sync/fundamentals"}
+
+    return {
+        "code": code,
+        "date": str(row.date),
+        "pe_ttm": row.pe_ttm,
+        "pb_mrq": row.pb_mrq,
+        "roe": row.roe,
+        "eps": row.eps,
+        "market_cap": row.market_cap,
+        "circulating_cap": row.circulating_cap,
+        "debt_ratio": row.debt_ratio,
+        "main_net_inflow": row.main_net_inflow,
+        "retail_net_inflow": row.retail_net_inflow,
+        "large_net_inflow": row.large_net_inflow,
+        "vol_ratio": row.vol_ratio,
+        "turnover_ratio": row.turnover_ratio,
+        "committee": row.committee,
+        "swing": row.swing,
+        "rise_day_count": row.rise_day_count,
+        "chg_5d": row.chg_5d,
+        "chg_10d": row.chg_10d,
+        "chg_20d": row.chg_20d,
+        "chg_60d": row.chg_60d,
+        "chg_year": row.chg_year,
+    }

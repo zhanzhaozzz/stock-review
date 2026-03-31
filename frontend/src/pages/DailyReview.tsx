@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import api from "../api/client";
+import StockDrawer from "../components/StockDrawer";
 
 interface ReviewItem {
   id: number;
@@ -55,6 +57,11 @@ const phaseColors: Record<string, string> = {
 };
 
 export default function DailyReview() {
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const dateParam = searchParams.get("date");
+  const isHistoryMode = !!dateParam;
+
   const [review, setReview] = useState<ReviewItem | null>(null);
   const [ladder, setLadder] = useState<LimitUpData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -62,17 +69,21 @@ export default function DailyReview() {
   const [saving, setSaving] = useState(false);
 
   const [form, setForm] = useState<Partial<ReviewItem>>({});
+  const [selectedStock, setSelectedStock] = useState<{ code: string; name: string; sector: string } | null>(null);
 
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [todayRes, ladderRes] = await Promise.allSettled([
-        api.get("/review/today"),
-        api.get("/market/limit-up?date=today"),
+      const reviewUrl = dateParam ? `/review/date/${dateParam}` : "/review/today";
+      const ladderDate = dateParam || "today";
+
+      const [reviewRes, ladderRes] = await Promise.allSettled([
+        api.get(reviewUrl),
+        api.get(`/market/limit-up?date=${ladderDate}`),
       ]);
-      if (todayRes.status === "fulfilled") {
-        setReview(todayRes.value.data);
-        setForm(todayRes.value.data);
+      if (reviewRes.status === "fulfilled") {
+        setReview(reviewRes.value.data);
+        setForm(reviewRes.value.data);
       } else {
         setReview(null);
         setForm({});
@@ -81,7 +92,7 @@ export default function DailyReview() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [dateParam]);
 
   useEffect(() => {
     loadData();
@@ -139,15 +150,29 @@ export default function DailyReview() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold">每日复盘（结构化表单）</h2>
+        <div className="flex items-center gap-3">
+          {isHistoryMode && (
+            <button
+              onClick={() => navigate("/review/history")}
+              className="px-3 py-1.5 text-sm bg-gray-800 hover:bg-gray-700 rounded-lg transition"
+            >
+              &larr; 返回历史
+            </button>
+          )}
+          <h2 className="text-xl font-bold">
+            {isHistoryMode ? `历史复盘 (${dateParam})` : "每日复盘（结构化表单）"}
+          </h2>
+        </div>
         <div className="flex items-center gap-2">
-          <button
-            onClick={handleGenerate}
-            disabled={generating}
-            className="px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-500 disabled:opacity-50 rounded-lg transition"
-          >
-            {generating ? "生成中..." : "生成草稿"}
-          </button>
+          {!isHistoryMode && (
+            <button
+              onClick={handleGenerate}
+              disabled={generating}
+              className="px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-500 disabled:opacity-50 rounded-lg transition"
+            >
+              {generating ? "生成中..." : "生成草稿"}
+            </button>
+          )}
           <button
             onClick={() => handleSave(false)}
             disabled={saving || !review}
@@ -169,8 +194,17 @@ export default function DailyReview() {
         <div className="text-gray-500 text-center py-20">加载中...</div>
       ) : !review ? (
         <div className="text-gray-500 text-center py-20">
-          <p>今日暂无复盘</p>
-          <p className="text-xs mt-2 text-gray-600">点击“生成草稿”从梯队+情绪周期生成复盘草稿</p>
+          {isHistoryMode ? (
+            <>
+              <p>{dateParam} 无复盘记录</p>
+              <p className="text-xs mt-2 text-gray-600">该日期没有生成过复盘</p>
+            </>
+          ) : (
+            <>
+              <p>今日暂无复盘</p>
+              <p className="text-xs mt-2 text-gray-600">点击"生成草稿"从梯队+情绪周期生成复盘草稿</p>
+            </>
+          )}
         </div>
       ) : (
         <>
@@ -306,7 +340,11 @@ export default function DailyReview() {
                     </div>
                     <div className="grid grid-cols-4 gap-2">
                       {(lv.stocks || []).slice(0, 12).map((s) => (
-                        <div key={s.code} className="bg-gray-950 border border-gray-800 rounded-lg p-3">
+                        <div
+                          key={s.code}
+                          className="bg-gray-950 border border-gray-800 rounded-lg p-3 cursor-pointer hover:border-blue-500/50 hover:bg-gray-900 transition"
+                          onClick={() => setSelectedStock({ code: s.code, name: s.name, sector: s.sector })}
+                        >
                           <div className="text-sm font-mono">{s.code}</div>
                           <div className="text-sm font-medium truncate">{s.name}</div>
                           <div className="text-xs text-gray-500 truncate">{s.sector || "—"}</div>
@@ -364,7 +402,15 @@ export default function DailyReview() {
           </div>
         </>
       )}
+
+      {selectedStock && (
+        <StockDrawer
+          code={selectedStock.code}
+          name={selectedStock.name}
+          sector={selectedStock.sector}
+          onClose={() => setSelectedStock(null)}
+        />
+      )}
     </div>
   );
 }
-

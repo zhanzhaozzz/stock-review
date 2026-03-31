@@ -1,0 +1,137 @@
+{
+  "version": "1.0.0",
+  "timestamp": "2026-03-31T20:40:28+08:00",
+  "project": {
+    "name": "stock-review",
+    "description": "股票复盘分析系统",
+    "root_path": "D:\\PythonProject\\stock-review"
+  },
+  "scan_summary": {
+    "total_files_estimated": 150,
+    "files_scanned": 35,
+    "coverage_percentage": 23,
+    "scan_depth": "module-priority"
+  },
+  "modules": [
+    {
+      "path": "backend",
+      "language": "Python",
+      "entry_file": "main.py",
+      "description": "FastAPI 后端服务",
+      "api_routes": [
+        "market.py",
+        "ratings.py",
+        "watchlist.py",
+        "news.py",
+        "review.py",
+        "strategy.py",
+        "operations.py",
+        "sync.py",
+        "analysis.py"
+      ],
+      "core_engines": [
+        "rating_engine.py",
+        "sentiment_engine.py",
+        "review_engine.py",
+        "strategy_matcher.py",
+        "limit_up_tracker.py"
+      ],
+      "models": [
+        "stock.py",
+        "rating.py",
+        "review.py",
+        "sentiment.py",
+        "watchlist.py",
+        "news.py",
+        "strategy.py",
+        "market.py",
+        "user.py",
+        "llm_usage.py"
+      ],
+      "data_providers": [
+        "akshare_fetcher.py",
+        "tushare_fetcher.py",
+        "efinance_fetcher.py"
+      ],
+      "llm_prompts": [
+        "rating.py",
+        "analysis.py",
+        "review.py",
+        "news_filter.py"
+      ],
+      "has_tests": false,
+      "claude_md": "backend/CLAUDE.md"
+    },
+    {
+      "path": "frontend",
+      "language": "TypeScript",
+      "entry_file": "src/main.tsx",
+      "description": "React 前端 SPA",
+      "pages": [
+        "Dashboard.tsx",
+        "RatingBoard.tsx",
+        "Watchlist.tsx",
+        "News.tsx",
+        "DailyReview.tsx",
+        "ReviewHistory.tsx",
+        "Strategies.tsx",
+        "Operations.tsx",
+        "StockDetail.tsx",
+        "Settings.tsx"
+      ],
+      "components": [
+        "Shell.tsx",
+        "Sidebar.tsx",
+        "RadarChart.tsx",
+        "MiniKLine.tsx",
+        "SentimentTrend.tsx",
+        "WinRatePie.tsx",
+        "StockDrawer.tsx"
+      ],
+      "has_tests": false,
+      "claude_md": "frontend/CLAUDE.md"
+    },
+    {
+      "path": "docker",
+      "language": "YAML",
+      "description": "Docker 部署配置",
+      "files": [
+        "docker-compose.yml",
+        "nginx.conf"
+      ],
+      "has_tests": false
+    }
+  ],
+  "gaps": {
+    "missing_tests": true,
+    "missing_api_docs": false,
+    "missing_data_models": false,
+    "incomplete_modules": []
+  },
+  "ignored_patterns": [
+    "node_modules/**",
+    ".git/**",
+    "__pycache__/**",
+    "*.pyc",
+    "*.egg-info/**",
+    "dist/**",
+    "build/**",
+    ".env",
+    ".venv/**",
+    "venv/**",
+    "*.sqlite3",
+    "*.db",
+    ".idea/**",
+    ".vscode/**",
+    "docker/redis-data/**",
+    "backend/static/**",
+    "frontend/dist/**"
+  ],
+  "next_steps": [
+    "补充后端单元测试 (pytest)",
+    "补充前端组件测试 (Vitest)",
+    "添加 API 文档 (OpenAPI/Swagger)",
+    "完善 LLM Prompt 调优指南"
+  ],
+  "truncated": false
+}

@@ -34,6 +34,8 @@ class DailyReviewItem(BaseModel):
 
 class ReviewUpdateRequest(BaseModel):
     """用户编辑/确认复盘的请求。"""
+    market_sentiment: Optional[str] = None
+    sentiment_detail: Optional[str] = None
     review_summary: Optional[str] = None
     next_day_plan: Optional[str] = None
     applicable_strategy: Optional[str] = None

@@ -9,6 +9,7 @@ from app.models.sentiment import SentimentCycleLog, OperationRecord
 from app.models.user import User
 from app.models.llm_usage import LLMUsage
 from app.models.market import MarketSnapshot
+from app.models.fundamental import StockFundamental
 
 __all__ = [
     "Stock", "StockPrice",
@@ -22,4 +23,5 @@ __all__ = [
     "SentimentCycleLog", "OperationRecord",
     "User",
     "LLMUsage",
+    "StockFundamental",
 ]

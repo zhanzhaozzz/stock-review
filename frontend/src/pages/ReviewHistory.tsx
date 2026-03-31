@@ -8,8 +8,10 @@ interface ReviewItem {
   date: string;
   market_sentiment: string;
   market_height: number;
+  market_leader: string;
   main_sector: string;
   review_summary: string;
+  is_confirmed: boolean;
 }
 
 interface SentimentLog {
@@ -50,7 +52,7 @@ export default function ReviewHistory() {
     setLoading(true);
     try {
       const [r1, r2] = await Promise.allSettled([
-        api.get("/review/list?limit=120"),
+        api.get("/review/list?limit=100"),
         api.get("/review/sentiment?limit=90"),
       ]);
       if (r1.status === "fulfilled") setReviews(r1.value.data || []);
@@ -192,8 +194,20 @@ export default function ReviewHistory() {
                           {r.market_sentiment}
                         </span>
                       )}
+                      {r.is_confirmed ? (
+                        <span className="text-xs px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-300 border border-emerald-500/30">
+                          已确认
+                        </span>
+                      ) : (
+                        <span className="text-xs px-2 py-0.5 rounded bg-gray-500/10 text-gray-500 border border-gray-700">
+                          未确认
+                        </span>
+                      )}
                     </div>
-                    <div className="text-xs text-gray-500">高度 {r.market_height} 板</div>
+                    <div className="text-xs text-gray-500 flex items-center gap-3">
+                      {r.market_leader && <span>龙头: {r.market_leader}</span>}
+                      <span>高度 {r.market_height} 板</span>
+                    </div>
                   </div>
                   <div className="mt-1 text-sm text-gray-300 truncate">
                     {r.main_sector ? `主线: ${r.main_sector} · ` : ""}{r.review_summary || "—"}

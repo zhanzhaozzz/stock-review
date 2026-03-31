@@ -27,6 +27,15 @@ body {
 .cycle-chaos-high { @apply text-yellow-400 bg-yellow-950; }
 .cycle-retreat { @apply text-orange-400 bg-orange-950; }
 
+/* 右侧抽屉滑入动画 */
+@keyframes slide-in-right {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+.animate-slide-in-right {
+  animation: slide-in-right 0.25s ease-out;
+}
+
 /* Scrollbar */
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }

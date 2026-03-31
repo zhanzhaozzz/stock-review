@@ -66,16 +66,28 @@ app.add_middleware(
 app.include_router(api_router)
 
 
-@app.get("/api/health")
-async def health():
-    return {"status": "ok", "app": settings.app_name}
-
-
 import pathlib
+from starlette.responses import FileResponse
+
 
 static_dir = pathlib.Path(__file__).parent / "static"
 if static_dir.exists():
-    app.mount("/", StaticFiles(directory=str(static_dir), html=True), name="static")
+    # 将 /assets 子目录挂载为静态文件服务（JS/CSS/图片等构建产物）
+    assets_dir = static_dir / "assets"
+    if assets_dir.exists():
+        app.mount("/assets", StaticFiles(directory=str(assets_dir)), name="assets")
+
+    # SPA fallback：先尝试在 static_dir 根目录找对应文件（favicon.svg 等），
+    # 找不到则返回 index.html 以支持前端 client-side 路由
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def spa_fallback(full_path: str):
+        candidate = static_dir / full_path
+        if candidate.is_file():
+            return FileResponse(str(candidate))
+        index = static_dir / "index.html"
+        if index.exists():
+            return FileResponse(str(index))
+        return {"detail": "Not Found"}
 
 if __name__ == "__main__":
     import uvicorn

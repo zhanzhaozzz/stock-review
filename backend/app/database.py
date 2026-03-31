@@ -80,7 +80,7 @@ async def _migrate_operation_records(conn):
 
 async def init_db():
     """Create all tables."""
-    from app.models import stock, rating, analysis, watchlist, news, review, strategy, sentiment, user, llm_usage, market  # noqa: F401
+    from app.models import stock, rating, analysis, watchlist, news, review, strategy, sentiment, user, llm_usage, market, fundamental  # noqa: F401
 
     async with engine.begin() as conn:
         await _migrate_operation_records(conn)

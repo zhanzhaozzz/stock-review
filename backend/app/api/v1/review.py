@@ -1,11 +1,12 @@
 """每日复盘 API。
 
 数据流:
-  POST /run        — 触发复盘 → 采集涨停/情绪 → AI 总结 → 写入 daily_reviews + sentiment_cycle_log
-  GET  /list       — 历史复盘列表
-  GET  /{review_id}— 单次复盘详情
-  PUT  /{review_id}— 用户编辑/确认复盘
-  GET  /sentiment   — 情绪周期日志
+  POST /run              — 触发复盘 → 采集涨停/情绪 → AI 总结 → 写入 daily_reviews + sentiment_cycle_log
+  GET  /list             — 历史复盘列表
+  GET  /date/{date}      — 按日期获取复盘（历史联动用）
+  GET  /{review_id}      — 单次复盘详情
+  PUT  /{review_id}      — 用户编辑/确认复盘
+  GET  /sentiment        — 情绪周期日志
 """
 import logging
 from datetime import date
@@ -124,7 +125,7 @@ async def today_review(db: AsyncSession = Depends(get_db)):
 
 @router.get("/list", response_model=list[DailyReviewItem])
 async def list_reviews(
-    limit: int = Query(30, ge=1, le=100),
+    limit: int = Query(30, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
 ):
     """历史复盘列表。"""
@@ -136,7 +137,7 @@ async def list_reviews(
 
 @router.get("/sentiment", response_model=list[SentimentLogItem])
 async def sentiment_log(
-    limit: int = Query(30, ge=1, le=100),
+    limit: int = Query(30, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
 ):
     """情绪周期日志。"""
@@ -199,6 +200,21 @@ async def sentiment_transitions(
             "note": row.transition_note or "",
         })
     return transitions
+
+
+@router.get("/date/{target_date}", response_model=DailyReviewItem)
+async def get_review_by_date(target_date: str, db: AsyncSession = Depends(get_db)):
+    """按日期获取复盘（历史联动用）。"""
+    try:
+        d = date.fromisoformat(target_date)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="日期格式错误，应为 YYYY-MM-DD")
+    stmt = select(DailyReview).where(DailyReview.date == d).limit(1)
+    result = await db.execute(stmt)
+    r = result.scalar_one_or_none()
+    if not r:
+        raise HTTPException(status_code=404, detail=f"{target_date} 无复盘记录")
+    return _to_review_item(r)
 
 
 @router.get("/{review_id}", response_model=DailyReviewItem)

@@ -13,7 +13,7 @@ if not ENV_PATH.exists():
 class Settings(BaseSettings):
     app_name: str = "StockReview"
     app_env: str = "development"
-    api_port: int = 8000
+    api_port: int = 8001
 
     # Database
     database_url: str = "sqlite+aiosqlite:///./data/stock_review.db"

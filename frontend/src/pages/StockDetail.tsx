@@ -52,11 +52,76 @@ interface KLinePoint {
   volume: number;
 }
 
+interface FundamentalInfo {
+  date: string;
+  pe_ttm: number | null;
+  pb_mrq: number | null;
+  roe: number | null;
+  eps: number | null;
+  market_cap: number | null;
+  circulating_cap: number | null;
+  debt_ratio: number | null;
+  main_net_inflow: number | null;
+  retail_net_inflow: number | null;
+  large_net_inflow: number | null;
+  vol_ratio: number | null;
+  turnover_ratio: number | null;
+  committee: number | null;
+  swing: number | null;
+  rise_day_count: number | null;
+  chg_5d: number | null;
+  chg_10d: number | null;
+  chg_20d: number | null;
+  chg_60d: number | null;
+  chg_year: number | null;
+}
+
+function formatMoney(val: number | null): string {
+  if (val == null) return "--";
+  const abs = Math.abs(val);
+  if (abs >= 1e8) return `${(val / 1e8).toFixed(1)}亿`;
+  if (abs >= 1e4) return `${(val / 1e4).toFixed(0)}万`;
+  return `${val.toFixed(0)}元`;
+}
+
+function valColor(val: number | null, thresholds: [number, string][], fallback = "text-gray-300"): string {
+  if (val == null) return fallback;
+  for (const [t, c] of thresholds) {
+    if (val < t) return c;
+  }
+  return fallback;
+}
+
+function ChgBadge({ value, label }: { value: number | null; label: string }) {
+  if (value == null) return null;
+  const color = value > 0 ? "text-red-400" : value < 0 ? "text-green-400" : "text-gray-400";
+  return (
+    <div className="flex flex-col items-center bg-gray-800/60 rounded-lg px-3 py-2">
+      <span className="text-[10px] text-gray-500">{label}</span>
+      <span className={`text-sm font-mono font-medium ${color}`}>
+        {value > 0 ? "+" : ""}{value.toFixed(2)}%
+      </span>
+    </div>
+  );
+}
+
+function MetricCard({ label, value, unit, colorClass }: { label: string; value: string; unit?: string; colorClass?: string }) {
+  return (
+    <div className="bg-gray-800/50 rounded-lg p-3 text-center">
+      <div className="text-[11px] text-gray-500 mb-1">{label}</div>
+      <div className={`text-base font-mono font-semibold ${colorClass || "text-gray-200"}`}>
+        {value}{unit && <span className="text-xs font-normal text-gray-500 ml-0.5">{unit}</span>}
+      </div>
+    </div>
+  );
+}
+
 export default function StockDetail() {
   const { code } = useParams<{ code: string }>();
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
   const [rating, setRating] = useState<RatingInfo | null>(null);
   const [kline, setKline] = useState<KLinePoint[]>([]);
+  const [fund, setFund] = useState<FundamentalInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [analyzing, setAnalyzing] = useState(false);
 
@@ -64,10 +129,11 @@ export default function StockDetail() {
     if (!code) return;
     setLoading(true);
     try {
-      const [analysisRes, ratingRes, kRes] = await Promise.allSettled([
+      const [analysisRes, ratingRes, kRes, fRes] = await Promise.allSettled([
         api.get(`/analysis/history?code=${code}&limit=1`),
         api.get(`/ratings/history/${code}?limit=1`),
         api.get(`/market/stock/${code}/daily?days=90`),
+        api.get(`/market/fundamental/${code}`),
       ]);
       if (analysisRes.status === "fulfilled" && analysisRes.value.data?.length > 0) {
         const latest = analysisRes.value.data[0];
@@ -99,6 +165,12 @@ export default function StockDetail() {
       }
       if (kRes.status === "fulfilled") {
         setKline((kRes.value.data?.data || []) as KLinePoint[]);
+      }
+      if (fRes.status === "fulfilled" && fRes.value.data) {
+        const d = fRes.value.data;
+        if (d.pe_ttm != null || d.pb_mrq != null || d.main_net_inflow != null) {
+          setFund(d as FundamentalInfo);
+        }
       }
     } catch {
       /* ignore */
@@ -133,6 +205,12 @@ export default function StockDetail() {
     "卖出": "text-green-400 bg-green-500/10 border-green-500/30",
   };
 
+  const hasValuation = fund && (fund.pe_ttm != null || fund.pb_mrq != null || fund.roe != null);
+  const hasMoneyFlow = fund && fund.main_net_inflow != null;
+  const hasChgData = fund && (fund.chg_5d != null || fund.chg_20d != null || fund.chg_year != null);
+  const hasMicroData = fund && (fund.vol_ratio != null || fund.swing != null || fund.committee != null);
+  const hasFundData = hasValuation || hasMoneyFlow || hasChgData || hasMicroData;
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -148,7 +226,7 @@ export default function StockDetail() {
 
       {loading ? (
         <div className="text-gray-500 text-center py-20">加载中...</div>
-      ) : !analysis && !rating ? (
+      ) : !analysis && !rating && !hasFundData ? (
         <div className="text-gray-500 text-center py-20">
           <p>暂无分析数据</p>
           <p className="text-xs mt-2 text-gray-600">点击"运行 AI 分析"获取深度分析报告</p>
@@ -176,6 +254,150 @@ export default function StockDetail() {
                   size={260}
                 />
               </div>
+            </div>
+          )}
+
+          {/* 基本面数据区块 */}
+          {hasFundData && (
+            <div className="grid grid-cols-2 gap-4">
+              {/* 核心估值 */}
+              {hasValuation && (
+                <div className="bg-gray-900 rounded-xl p-5 border border-gray-800">
+                  <h3 className="text-sm font-semibold text-gray-400 mb-4">核心估值</h3>
+                  <div className="grid grid-cols-3 gap-3">
+                    {fund.pe_ttm != null && (
+                      <MetricCard
+                        label="PE(TTM)"
+                        value={fund.pe_ttm.toFixed(2)}
+                        colorClass={valColor(fund.pe_ttm, [[0, "text-red-400"], [30, "text-green-400"], [50, "text-orange-400"]])}
+                      />
+                    )}
+                    {fund.pb_mrq != null && (
+                      <MetricCard
+                        label="PB(MRQ)"
+                        value={`${fund.pb_mrq.toFixed(3)}${fund.pb_mrq < 1 && fund.pb_mrq > 0 ? " 破净" : ""}`}
+                        colorClass={fund.pb_mrq < 1 ? "text-blue-400" : "text-gray-200"}
+                      />
+                    )}
+                    {fund.market_cap != null && (
+                      <MetricCard label="总市值" value={formatMoney(fund.market_cap)} />
+                    )}
+                    {fund.roe != null && (
+                      <MetricCard
+                        label="ROE"
+                        value={fund.roe.toFixed(2)}
+                        unit="%"
+                        colorClass={valColor(fund.roe, [[0, "text-red-400"], [8, "text-gray-200"]], "text-green-400")}
+                      />
+                    )}
+                    {fund.eps != null && (
+                      <MetricCard label="EPS" value={fund.eps.toFixed(3)} />
+                    )}
+                    {fund.debt_ratio != null && (
+                      <MetricCard
+                        label="资产负债率"
+                        value={fund.debt_ratio.toFixed(1)}
+                        unit="%"
+                        colorClass={valColor(fund.debt_ratio, [[70, "text-green-400"], [80, "text-orange-400"]], "text-red-400")}
+                      />
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* 资金流向 */}
+              {hasMoneyFlow && (
+                <div className="bg-gray-900 rounded-xl p-5 border border-gray-800">
+                  <h3 className="text-sm font-semibold text-gray-400 mb-4">资金流向</h3>
+                  <div className="space-y-4">
+                    <div>
+                      <div className="flex justify-between text-sm mb-1.5">
+                        <span className="text-gray-400">主力净流入</span>
+                        <span className={`font-mono font-medium ${(fund.main_net_inflow || 0) > 0 ? "text-red-400" : "text-green-400"}`}>
+                          {(fund.main_net_inflow || 0) > 0 ? "+" : ""}{formatMoney(fund.main_net_inflow)}
+                        </span>
+                      </div>
+                      <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
+                        <div
+                          className="h-full rounded-full transition-all"
+                          style={{
+                            width: `${Math.min(Math.abs(fund.main_net_inflow || 0) / 5e8 * 100, 100)}%`,
+                            backgroundColor: (fund.main_net_inflow || 0) > 0 ? "rgb(248 113 113)" : "rgb(74 222 128)",
+                          }}
+                        />
+                      </div>
+                    </div>
+                    {fund.retail_net_inflow != null && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-400">散户净流入</span>
+                        <span className={`font-mono font-medium ${fund.retail_net_inflow > 0 ? "text-red-400" : "text-green-400"}`}>
+                          {fund.retail_net_inflow > 0 ? "+" : ""}{formatMoney(fund.retail_net_inflow)}
+                        </span>
+                      </div>
+                    )}
+                    {fund.large_net_inflow != null && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-400">超大单净流入</span>
+                        <span className={`font-mono font-medium ${fund.large_net_inflow > 0 ? "text-red-400" : "text-green-400"}`}>
+                          {fund.large_net_inflow > 0 ? "+" : ""}{formatMoney(fund.large_net_inflow)}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* 多周期涨跌幅 */}
+              {hasChgData && (
+                <div className="bg-gray-900 rounded-xl p-5 border border-gray-800">
+                  <h3 className="text-sm font-semibold text-gray-400 mb-4">多周期涨跌幅</h3>
+                  <div className="flex flex-wrap gap-2.5">
+                    <ChgBadge value={fund.chg_5d} label="5日" />
+                    <ChgBadge value={fund.chg_10d} label="10日" />
+                    <ChgBadge value={fund.chg_20d} label="20日" />
+                    <ChgBadge value={fund.chg_60d} label="60日" />
+                    <ChgBadge value={fund.chg_year} label="年初至今" />
+                  </div>
+                </div>
+              )}
+
+              {/* 市场微观 */}
+              {hasMicroData && (
+                <div className="bg-gray-900 rounded-xl p-5 border border-gray-800">
+                  <h3 className="text-sm font-semibold text-gray-400 mb-4">市场微观数据</h3>
+                  <div className="grid grid-cols-3 gap-3">
+                    {fund.vol_ratio != null && (
+                      <MetricCard
+                        label="量比"
+                        value={fund.vol_ratio.toFixed(2)}
+                        colorClass={valColor(fund.vol_ratio, [[1, "text-gray-200"], [2, "text-orange-400"]], "text-red-400")}
+                      />
+                    )}
+                    {fund.turnover_ratio != null && (
+                      <MetricCard label="换手率" value={fund.turnover_ratio.toFixed(2)} unit="%" />
+                    )}
+                    {fund.committee != null && (
+                      <MetricCard
+                        label="委比"
+                        value={`${fund.committee > 0 ? "+" : ""}${fund.committee.toFixed(2)}`}
+                        unit="%"
+                        colorClass={fund.committee > 0 ? "text-red-400" : "text-green-400"}
+                      />
+                    )}
+                    {fund.swing != null && (
+                      <MetricCard label="振幅" value={fund.swing.toFixed(2)} unit="%" />
+                    )}
+                    {fund.rise_day_count != null && fund.rise_day_count !== 0 && (
+                      <MetricCard
+                        label={fund.rise_day_count > 0 ? "连涨" : "连跌"}
+                        value={`${Math.abs(fund.rise_day_count)}`}
+                        unit="天"
+                        colorClass={fund.rise_day_count > 0 ? "text-red-400" : "text-green-400"}
+                      />
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

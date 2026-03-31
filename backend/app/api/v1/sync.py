@@ -51,6 +51,7 @@ async def sync_all():
     results["market"] = await _sync_market()
     results["news"] = await _sync_news()
     results["watchlist_quotes"] = await _sync_watchlist_quotes()
+    results["fundamentals"] = await _sync_fundamentals()
     return results
 
 
@@ -172,3 +173,93 @@ async def _sync_watchlist_quotes() -> dict:
     """批量采集自选股行情 → 写入 stock_prices 表。"""
     from app.api.v1.watchlist import sync_watchlist_quotes
     return await sync_watchlist_quotes()
+
+
+@router.post("/fundamentals")
+async def sync_fundamentals_api():
+    """采集自选股基本面数据 → stock_fundamentals 表。"""
+    return await _sync_fundamentals()
+
+
+async def _sync_fundamentals() -> dict:
+    """遍历自选股列表，采集基本面 + 计算多周期涨跌幅，upsert 到 stock_fundamentals。"""
+    from app.data_provider.fundamental import get_fundamental, compute_price_derived
+    from app.models.fundamental import StockFundamental
+    from app.models.watchlist import Watchlist
+
+    today = date.today()
+    synced = 0
+    failed = 0
+
+    async with async_session() as session:
+        wl_result = await session.execute(select(Watchlist))
+        watchlist_rows = wl_result.scalars().all()
+        codes = list({row.code for row in watchlist_rows})
+
+        if not codes:
+            return {"status": "ok", "synced": 0, "message": "no watchlist stocks"}
+
+        for code in codes:
+            try:
+                fund_data = await get_fundamental(code)
+                if not fund_data:
+                    failed += 1
+                    continue
+
+                derived = await compute_price_derived(code, session)
+
+                existing = await session.execute(
+                    select(StockFundamental)
+                    .where(
+                        StockFundamental.code == code,
+                        StockFundamental.date == today,
+                    )
+                    .limit(1)
+                )
+                row = existing.scalar_one_or_none()
+
+                fields = {
+                    "pe_ttm": fund_data.get("pe_ttm"),
+                    "pb_mrq": fund_data.get("pb_mrq"),
+                    "roe": fund_data.get("roe"),
+                    "eps": fund_data.get("eps"),
+                    "market_cap": fund_data.get("market_cap"),
+                    "circulating_cap": fund_data.get("circulating_cap"),
+                    "debt_ratio": fund_data.get("debt_ratio"),
+                    "main_net_inflow": fund_data.get("main_net_inflow"),
+                    "retail_net_inflow": fund_data.get("retail_net_inflow"),
+                    "large_net_inflow": fund_data.get("large_net_inflow"),
+                    "vol_ratio": fund_data.get("vol_ratio"),
+                    "turnover_ratio": fund_data.get("turnover_ratio"),
+                    "committee": fund_data.get("committee"),
+                    "swing": fund_data.get("swing"),
+                    "rise_day_count": derived.get("rise_day_count"),
+                    "chg_5d": derived.get("chg_5d"),
+                    "chg_10d": derived.get("chg_10d"),
+                    "chg_20d": derived.get("chg_20d"),
+                    "chg_60d": derived.get("chg_60d"),
+                    "chg_year": derived.get("chg_year"),
+                }
+
+                if row:
+                    for k, v in fields.items():
+                        setattr(row, k, v)
+                else:
+                    session.add(StockFundamental(code=code, date=today, **fields))
+
+                synced += 1
+                await asyncio.sleep(0.3)
+
+            except Exception as e:
+                logger.warning("Fundamental sync failed for %s: %s", code, e)
+                failed += 1
+
+        try:
+            await session.commit()
+        except Exception as e:
+            await session.rollback()
+            logger.error("Fundamental sync commit failed: %s", e)
+            return {"status": "error", "error": str(e)}
+
+    logger.info("Fundamental sync done: synced=%d, failed=%d", synced, failed)
+    return {"status": "ok", "synced": synced, "failed": failed}
