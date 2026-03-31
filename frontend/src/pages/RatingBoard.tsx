@@ -1,10 +1,6 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import {
-  RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
-  ResponsiveContainer,
-} from "recharts";
 import api from "../api/client";
+import StockDrawer from "../components/StockDrawer";
 
 interface RatingItem {
   code: string;
@@ -48,10 +44,9 @@ export default function RatingBoard() {
   const [ratings, setRatings] = useState<RatingItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
-  const [expanded, setExpanded] = useState<string | null>(null);
+  const [selectedStock, setSelectedStock] = useState<{ code: string; name: string } | null>(null);
   const [sortBy, setSortBy] = useState("total_score");
   const [stockInput, setStockInput] = useState("");
-  const navigate = useNavigate();
 
   useEffect(() => {
     loadRatings();
@@ -85,17 +80,6 @@ export default function RatingBoard() {
     } finally {
       setRunning(false);
     }
-  }
-
-  function getRadarData(r: RatingItem) {
-    return [
-      { dim: "趋势", value: r.trend_score },
-      { dim: "动量", value: r.momentum_score },
-      { dim: "波动", value: r.volatility_score },
-      { dim: "成交", value: r.volume_score },
-      { dim: "价值", value: r.value_score },
-      { dim: "情绪", value: r.sentiment_score },
-    ];
   }
 
   return (
@@ -172,13 +156,10 @@ export default function RatingBoard() {
               </thead>
               <tbody>
                 {ratings.map((r, i) => (
-                  <>
                     <tr
                       key={r.code}
                       className="border-b border-gray-800/50 hover:bg-gray-800/30 cursor-pointer"
-                      onClick={() =>
-                        setExpanded(expanded === r.code ? null : r.code)
-                      }
+                      onClick={() => setSelectedStock({ code: r.code, name: r.name })}
                     >
                       <td className="px-4 py-3 text-gray-500">{i + 1}</td>
                       <td className="px-4 py-3">
@@ -218,74 +199,19 @@ export default function RatingBoard() {
                         {r.fundamental_score?.toFixed(0) ?? "--"}
                       </td>
                     </tr>
-                    {expanded === r.code && (
-                      <tr key={`${r.code}-detail`}>
-                        <td colSpan={10} className="px-4 py-4 bg-gray-800/50">
-                          <div className="flex gap-6">
-                            <div className="w-64 h-52">
-                              <ResponsiveContainer width="100%" height="100%">
-                                <RadarChart data={getRadarData(r)}>
-                                  <PolarGrid stroke="#374151" />
-                                  <PolarAngleAxis
-                                    dataKey="dim"
-                                    tick={{ fill: "#9ca3af", fontSize: 12 }}
-                                  />
-                                  <PolarRadiusAxis
-                                    domain={[0, 100]}
-                                    tick={false}
-                                    axisLine={false}
-                                  />
-                                  <Radar
-                                    dataKey="value"
-                                    stroke="#3b82f6"
-                                    fill="#3b82f6"
-                                    fillOpacity={0.25}
-                                    strokeWidth={2}
-                                  />
-                                </RadarChart>
-                              </ResponsiveContainer>
-                            </div>
-                            <div className="flex-1 space-y-3">
-                              <div className="flex gap-4 text-sm">
-                                {r.pe != null && (
-                                  <span className="text-gray-400">
-                                    PE: <span className="text-gray-200">{r.pe.toFixed(2)}</span>
-                                  </span>
-                                )}
-                                {r.pb != null && (
-                                  <span className="text-gray-400">
-                                    PB: <span className="text-gray-200">{r.pb.toFixed(2)}</span>
-                                  </span>
-                                )}
-                                {r.roe != null && (
-                                  <span className="text-gray-400">
-                                    ROE: <span className="text-gray-200">{r.roe.toFixed(2)}</span>
-                                  </span>
-                                )}
-                              </div>
-                              <div className="text-sm text-gray-300 leading-relaxed whitespace-pre-wrap">
-                                {r.reason || "暂无分析"}
-                              </div>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  navigate(`/stock/${r.code}`);
-                                }}
-                                className="px-3 py-1 text-xs bg-blue-600/30 text-blue-400 rounded hover:bg-blue-600/50 transition"
-                              >
-                                查看详情
-                              </button>
-                            </div>
-                          </div>
-                        </td>
-                      </tr>
-                    )}
-                  </>
                 ))}
               </tbody>
             </table>
           </div>
         </div>
+      )}
+
+      {selectedStock && (
+        <StockDrawer
+          code={selectedStock.code}
+          name={selectedStock.name}
+          onClose={() => setSelectedStock(null)}
+        />
       )}
     </div>
   );

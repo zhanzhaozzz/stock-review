@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import api from "../api/client";
 import { getPctColor, formatPct } from "../utils/stockColor";
+import StockDrawer from "../components/StockDrawer";
 
 interface WatchlistItem {
   id: number;
@@ -40,7 +40,7 @@ export default function Watchlist() {
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [searching, setSearching] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
-  const navigate = useNavigate();
+  const [selectedStock, setSelectedStock] = useState<{ code: string; name: string } | null>(null);
 
   useEffect(() => {
     loadData();
@@ -234,7 +234,7 @@ export default function Watchlist() {
                   <tr
                     key={item.code}
                     className="border-b border-gray-800/50 hover:bg-gray-800/30 cursor-pointer"
-                    onClick={() => navigate(`/stock/${item.code}`)}
+                    onClick={() => setSelectedStock({ code: item.code, name: item.name })}
                   >
                     <td className="px-4 py-3">
                       <div className="font-medium">{item.name}</div>
@@ -290,6 +290,14 @@ export default function Watchlist() {
             </table>
           </div>
         </div>
+      )}
+
+      {selectedStock && (
+        <StockDrawer
+          code={selectedStock.code}
+          name={selectedStock.name}
+          onClose={() => setSelectedStock(null)}
+        />
       )}
     </div>
   );
