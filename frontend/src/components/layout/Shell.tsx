@@ -3,7 +3,7 @@ import Sidebar from "./Sidebar";
 
 export default function Shell() {
   return (
-    <div className="min-h-screen bg-gray-950">
+    <div className="min-h-screen bg-base text-primary">
       <Sidebar />
       <main className="ml-56 min-h-screen">
         <div className="p-6">

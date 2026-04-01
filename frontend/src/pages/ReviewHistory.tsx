@@ -100,7 +100,7 @@ export default function ReviewHistory() {
         <h2 className="text-xl font-bold">历史复盘</h2>
         <div className="flex items-center gap-2">
           <select
-            className="bg-gray-900 border border-gray-800 rounded-lg px-3 py-1.5 text-sm"
+            className="bg-card border border-edge rounded-lg px-3 py-1.5 text-sm"
             value={phaseFilter}
             onChange={(e) => setPhaseFilter(e.target.value)}
           >
@@ -112,7 +112,7 @@ export default function ReviewHistory() {
           </select>
           <button
             onClick={loadData}
-            className="px-3 py-1.5 text-sm bg-gray-800 hover:bg-gray-700 rounded-lg transition"
+            className="px-3 py-1.5 text-sm bg-input hover:bg-card-hover rounded-lg transition"
           >
             刷新
           </button>
@@ -120,14 +120,14 @@ export default function ReviewHistory() {
       </div>
 
       {loading ? (
-        <div className="text-gray-500 text-center py-20">加载中...</div>
+        <div className="text-dim text-center py-20">加载中...</div>
       ) : (
         <>
           {/* 情绪趋势图 */}
-          <div className="bg-gray-900 rounded-xl p-5 border border-gray-800">
+          <div className="bg-card rounded-xl p-5 border border-edge">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-semibold text-gray-400">情绪周期趋势（近90天）</h3>
-              <div className="text-xs text-gray-500">纵轴：市场高度</div>
+              <h3 className="text-sm font-semibold text-muted">情绪周期趋势（近90天）</h3>
+              <div className="text-xs text-dim">纵轴：市场高度</div>
             </div>
             <SentimentTrend
               data={sentiment.map((s) => ({ date: s.date, cycle_phase: s.cycle_phase, market_height: s.market_height }))}
@@ -136,10 +136,10 @@ export default function ReviewHistory() {
           </div>
 
           {/* 日历视图（近90天） */}
-          <div className="bg-gray-900 rounded-xl p-5 border border-gray-800">
+          <div className="bg-card rounded-xl p-5 border border-edge">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-semibold text-gray-400">日历视图（近90天）</h3>
-              <div className="text-xs text-gray-500">
+              <h3 className="text-sm font-semibold text-muted">日历视图（近90天）</h3>
+              <div className="text-xs text-dim">
                 有复盘的日期可点击进入详情
               </div>
             </div>
@@ -148,24 +148,24 @@ export default function ReviewHistory() {
                 const key = iso(d);
                 const r = reviewMap.get(key);
                 const phase = r?.market_sentiment || "";
-                const cls = phase ? (phaseColors[phase] || "bg-gray-800 text-gray-300 border-gray-700") : "bg-gray-950 text-gray-700 border-gray-900";
+                const cls = phase ? (phaseColors[phase] || "bg-input text-secondary border-edge") : "bg-base text-dim border-gray-900";
                 const dim = daysBetween(new Date(), d) < 7 ? "ring-1 ring-blue-500/20" : "";
                 const clickable = !!r && (phaseFilter === "全部" || phase === phaseFilter);
                 return (
                   <button
                     key={key}
                     onClick={() => clickable && navigate(`/review?date=${key}`)}
-                    className={`h-14 rounded-lg border p-2 text-left transition ${cls} ${dim} ${clickable ? "hover:bg-gray-800/40" : "opacity-60 cursor-default"}`}
+                    className={`h-14 rounded-lg border p-2 text-left transition ${cls} ${dim} ${clickable ? "hover:bg-card-hover" : "opacity-60 cursor-default"}`}
                     disabled={!clickable}
                     title={r ? `${key} ${phase} 高度${r.market_height}板` : key}
                   >
                     <div className="text-[11px] font-mono">{key.slice(5)}</div>
                     {r ? (
-                      <div className="mt-1 text-[11px] text-gray-300/90 truncate">
+                      <div className="mt-1 text-[11px] text-secondary/90 truncate">
                         {phase} · {r.market_height}板
                       </div>
                     ) : (
-                      <div className="mt-1 text-[11px] text-gray-700">—</div>
+                      <div className="mt-1 text-[11px] text-dim">—</div>
                     )}
                   </button>
                 );
@@ -174,23 +174,23 @@ export default function ReviewHistory() {
           </div>
 
           {/* 列表（筛选后的） */}
-          <div className="bg-gray-900 rounded-xl border border-gray-800">
-            <div className="px-5 py-3 border-b border-gray-800 flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-gray-400">复盘列表</h3>
-              <div className="text-xs text-gray-500">共 {filteredReviews.length} 条</div>
+          <div className="bg-card rounded-xl border border-edge">
+            <div className="px-5 py-3 border-b border-edge flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-muted">复盘列表</h3>
+              <div className="text-xs text-dim">共 {filteredReviews.length} 条</div>
             </div>
-            <div className="divide-y divide-gray-800">
+            <div className="divide-y divide-edge">
               {filteredReviews.map((r) => (
                 <button
                   key={r.id}
                   onClick={() => navigate(`/review?date=${r.date}`)}
-                  className="w-full text-left px-5 py-3 hover:bg-gray-800/30 transition"
+                  className="w-full text-left px-5 py-3 hover:bg-card-hover transition"
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <span className="font-mono text-sm">{r.date}</span>
                       {r.market_sentiment && (
-                        <span className={`text-xs px-2 py-0.5 rounded border ${phaseColors[r.market_sentiment] || "border-gray-700 text-gray-400"}`}>
+                        <span className={`text-xs px-2 py-0.5 rounded border ${phaseColors[r.market_sentiment] || "border-edge text-muted"}`}>
                           {r.market_sentiment}
                         </span>
                       )}
@@ -199,23 +199,23 @@ export default function ReviewHistory() {
                           已确认
                         </span>
                       ) : (
-                        <span className="text-xs px-2 py-0.5 rounded bg-gray-500/10 text-gray-500 border border-gray-700">
+                        <span className="text-xs px-2 py-0.5 rounded bg-gray-500/10 text-dim border border-edge">
                           未确认
                         </span>
                       )}
                     </div>
-                    <div className="text-xs text-gray-500 flex items-center gap-3">
+                    <div className="text-xs text-dim flex items-center gap-3">
                       {r.market_leader && <span>龙头: {r.market_leader}</span>}
                       <span>高度 {r.market_height} 板</span>
                     </div>
                   </div>
-                  <div className="mt-1 text-sm text-gray-300 truncate">
+                  <div className="mt-1 text-sm text-secondary truncate">
                     {r.main_sector ? `主线: ${r.main_sector} · ` : ""}{r.review_summary || "—"}
                   </div>
                 </button>
               ))}
               {filteredReviews.length === 0 && (
-                <div className="text-gray-500 text-center py-16">暂无复盘数据</div>
+                <div className="text-dim text-center py-16">暂无复盘数据</div>
               )}
             </div>
           </div>
@@ -224,4 +224,3 @@ export default function ReviewHistory() {
     </div>
   );
 }
-

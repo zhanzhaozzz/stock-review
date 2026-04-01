@@ -154,6 +154,17 @@ async def limit_up_board(
     return {}
 
 
+@router.get("/sectors/{name}/constituents")
+async def sector_constituents(
+    name: str,
+    limit: int = Query(30, ge=1, le=100),
+):
+    """板块成分股列表 — 调用 AKShare 实时拉取，缓存 5 分钟。"""
+    from app.core.market_review import get_sector_constituents
+    data = await _with_timeout(get_sector_constituents(name, limit), fallback=[])
+    return data
+
+
 @router.get("/quote/{code}")
 async def stock_quote(code: str):
     """单只股票实时行情 — 仅用 Redis 短缓存（30s），不落库。"""

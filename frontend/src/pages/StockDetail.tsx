@@ -84,7 +84,7 @@ function formatMoney(val: number | null): string {
   return `${val.toFixed(0)}元`;
 }
 
-function valColor(val: number | null, thresholds: [number, string][], fallback = "text-gray-300"): string {
+function valColor(val: number | null, thresholds: [number, string][], fallback = "text-secondary"): string {
   if (val == null) return fallback;
   for (const [t, c] of thresholds) {
     if (val < t) return c;
@@ -94,10 +94,10 @@ function valColor(val: number | null, thresholds: [number, string][], fallback =
 
 function ChgBadge({ value, label }: { value: number | null; label: string }) {
   if (value == null) return null;
-  const color = value > 0 ? "text-red-400" : value < 0 ? "text-green-400" : "text-gray-400";
+  const color = value > 0 ? "text-red-400" : value < 0 ? "text-green-400" : "text-muted";
   return (
-    <div className="flex flex-col items-center bg-gray-800/60 rounded-lg px-3 py-2">
-      <span className="text-[10px] text-gray-500">{label}</span>
+    <div className="flex flex-col items-center bg-card-hover rounded-lg px-3 py-2">
+      <span className="text-[10px] text-dim">{label}</span>
       <span className={`text-sm font-mono font-medium ${color}`}>
         {value > 0 ? "+" : ""}{value.toFixed(2)}%
       </span>
@@ -107,10 +107,10 @@ function ChgBadge({ value, label }: { value: number | null; label: string }) {
 
 function MetricCard({ label, value, unit, colorClass }: { label: string; value: string; unit?: string; colorClass?: string }) {
   return (
-    <div className="bg-gray-800/50 rounded-lg p-3 text-center">
-      <div className="text-[11px] text-gray-500 mb-1">{label}</div>
-      <div className={`text-base font-mono font-semibold ${colorClass || "text-gray-200"}`}>
-        {value}{unit && <span className="text-xs font-normal text-gray-500 ml-0.5">{unit}</span>}
+    <div className="bg-card-hover rounded-lg p-3 text-center">
+      <div className="text-[11px] text-dim mb-1">{label}</div>
+      <div className={`text-base font-mono font-semibold ${colorClass || "text-primary"}`}>
+        {value}{unit && <span className="text-xs font-normal text-dim ml-0.5">{unit}</span>}
       </div>
     </div>
   );
@@ -201,7 +201,7 @@ export default function StockDetail() {
   const signalColor: Record<string, string> = {
     "买入": "text-red-400 bg-red-500/10 border-red-500/30",
     "持有": "text-orange-400 bg-orange-500/10 border-orange-500/30",
-    "观望": "text-gray-400 bg-gray-500/10 border-gray-500/30",
+    "观望": "text-muted bg-gray-500/10 border-gray-500/30",
     "卖出": "text-green-400 bg-green-500/10 border-green-500/30",
   };
 
@@ -225,23 +225,23 @@ export default function StockDetail() {
       </div>
 
       {loading ? (
-        <div className="text-gray-500 text-center py-20">加载中...</div>
+        <div className="text-dim text-center py-20">加载中...</div>
       ) : !analysis && !rating && !hasFundData ? (
-        <div className="text-gray-500 text-center py-20">
+        <div className="text-dim text-center py-20">
           <p>暂无分析数据</p>
-          <p className="text-xs mt-2 text-gray-600">点击"运行 AI 分析"获取深度分析报告</p>
+          <p className="text-xs mt-2 text-dim">点击"运行 AI 分析"获取深度分析报告</p>
         </div>
       ) : (
         <>
           {/* K线 + 雷达 */}
           {rating && (
             <div className="grid grid-cols-2 gap-4">
-              <div className="bg-gray-900 rounded-xl p-5 border border-gray-800">
-                <h3 className="text-sm font-semibold text-gray-400 mb-3">近90日收盘走势</h3>
+              <div className="bg-card rounded-xl p-5 border border-edge">
+                <h3 className="text-sm font-semibold text-muted mb-3">近90日收盘走势</h3>
                 <MiniKLine data={kline} height={260} />
               </div>
-              <div className="bg-gray-900 rounded-xl p-5 border border-gray-800">
-                <h3 className="text-sm font-semibold text-gray-400 mb-3">六维评分雷达图</h3>
+              <div className="bg-card rounded-xl p-5 border border-edge">
+                <h3 className="text-sm font-semibold text-muted mb-3">六维评分雷达图</h3>
                 <RadarChart
                   data={[
                     { label: "趋势", value: rating.trend_score || 0 },
@@ -262,8 +262,8 @@ export default function StockDetail() {
             <div className="grid grid-cols-2 gap-4">
               {/* 核心估值 */}
               {hasValuation && (
-                <div className="bg-gray-900 rounded-xl p-5 border border-gray-800">
-                  <h3 className="text-sm font-semibold text-gray-400 mb-4">核心估值</h3>
+                <div className="bg-card rounded-xl p-5 border border-edge">
+                  <h3 className="text-sm font-semibold text-muted mb-4">核心估值</h3>
                   <div className="grid grid-cols-3 gap-3">
                     {fund.pe_ttm != null && (
                       <MetricCard
@@ -276,7 +276,7 @@ export default function StockDetail() {
                       <MetricCard
                         label="PB(MRQ)"
                         value={`${fund.pb_mrq.toFixed(3)}${fund.pb_mrq < 1 && fund.pb_mrq > 0 ? " 破净" : ""}`}
-                        colorClass={fund.pb_mrq < 1 ? "text-blue-400" : "text-gray-200"}
+                        colorClass={fund.pb_mrq < 1 ? "text-blue-400" : "text-primary"}
                       />
                     )}
                     {fund.market_cap != null && (
@@ -287,7 +287,7 @@ export default function StockDetail() {
                         label="ROE"
                         value={fund.roe.toFixed(2)}
                         unit="%"
-                        colorClass={valColor(fund.roe, [[0, "text-red-400"], [8, "text-gray-200"]], "text-green-400")}
+                        colorClass={valColor(fund.roe, [[0, "text-red-400"], [8, "text-primary"]], "text-green-400")}
                       />
                     )}
                     {fund.eps != null && (
@@ -307,17 +307,17 @@ export default function StockDetail() {
 
               {/* 资金流向 */}
               {hasMoneyFlow && (
-                <div className="bg-gray-900 rounded-xl p-5 border border-gray-800">
-                  <h3 className="text-sm font-semibold text-gray-400 mb-4">资金流向</h3>
+                <div className="bg-card rounded-xl p-5 border border-edge">
+                  <h3 className="text-sm font-semibold text-muted mb-4">资金流向</h3>
                   <div className="space-y-4">
                     <div>
                       <div className="flex justify-between text-sm mb-1.5">
-                        <span className="text-gray-400">主力净流入</span>
+                        <span className="text-muted">主力净流入</span>
                         <span className={`font-mono font-medium ${(fund.main_net_inflow || 0) > 0 ? "text-red-400" : "text-green-400"}`}>
                           {(fund.main_net_inflow || 0) > 0 ? "+" : ""}{formatMoney(fund.main_net_inflow)}
                         </span>
                       </div>
-                      <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
+                      <div className="h-2 bg-input rounded-full overflow-hidden">
                         <div
                           className="h-full rounded-full transition-all"
                           style={{
@@ -329,7 +329,7 @@ export default function StockDetail() {
                     </div>
                     {fund.retail_net_inflow != null && (
                       <div className="flex justify-between text-sm">
-                        <span className="text-gray-400">散户净流入</span>
+                        <span className="text-muted">散户净流入</span>
                         <span className={`font-mono font-medium ${fund.retail_net_inflow > 0 ? "text-red-400" : "text-green-400"}`}>
                           {fund.retail_net_inflow > 0 ? "+" : ""}{formatMoney(fund.retail_net_inflow)}
                         </span>
@@ -337,7 +337,7 @@ export default function StockDetail() {
                     )}
                     {fund.large_net_inflow != null && (
                       <div className="flex justify-between text-sm">
-                        <span className="text-gray-400">超大单净流入</span>
+                        <span className="text-muted">超大单净流入</span>
                         <span className={`font-mono font-medium ${fund.large_net_inflow > 0 ? "text-red-400" : "text-green-400"}`}>
                           {fund.large_net_inflow > 0 ? "+" : ""}{formatMoney(fund.large_net_inflow)}
                         </span>
@@ -349,8 +349,8 @@ export default function StockDetail() {
 
               {/* 多周期涨跌幅 */}
               {hasChgData && (
-                <div className="bg-gray-900 rounded-xl p-5 border border-gray-800">
-                  <h3 className="text-sm font-semibold text-gray-400 mb-4">多周期涨跌幅</h3>
+                <div className="bg-card rounded-xl p-5 border border-edge">
+                  <h3 className="text-sm font-semibold text-muted mb-4">多周期涨跌幅</h3>
                   <div className="flex flex-wrap gap-2.5">
                     <ChgBadge value={fund.chg_5d} label="5日" />
                     <ChgBadge value={fund.chg_10d} label="10日" />
@@ -363,14 +363,14 @@ export default function StockDetail() {
 
               {/* 市场微观 */}
               {hasMicroData && (
-                <div className="bg-gray-900 rounded-xl p-5 border border-gray-800">
-                  <h3 className="text-sm font-semibold text-gray-400 mb-4">市场微观数据</h3>
+                <div className="bg-card rounded-xl p-5 border border-edge">
+                  <h3 className="text-sm font-semibold text-muted mb-4">市场微观数据</h3>
                   <div className="grid grid-cols-3 gap-3">
                     {fund.vol_ratio != null && (
                       <MetricCard
                         label="量比"
                         value={fund.vol_ratio.toFixed(2)}
-                        colorClass={valColor(fund.vol_ratio, [[1, "text-gray-200"], [2, "text-orange-400"]], "text-red-400")}
+                        colorClass={valColor(fund.vol_ratio, [[1, "text-primary"], [2, "text-orange-400"]], "text-red-400")}
                       />
                     )}
                     {fund.turnover_ratio != null && (
@@ -403,8 +403,8 @@ export default function StockDetail() {
 
           {/* 评级概览 */}
           {rating && (
-            <div className="bg-gray-900 rounded-xl p-5 border border-gray-800">
-              <h3 className="text-sm font-semibold text-gray-400 mb-3">量化评级</h3>
+            <div className="bg-card rounded-xl p-5 border border-edge">
+              <h3 className="text-sm font-semibold text-muted mb-3">量化评级</h3>
               <div className="flex items-center gap-6">
                 <div className="text-3xl font-bold">{rating.total_score?.toFixed(0)}</div>
                 <div className="text-lg font-medium">{rating.rating}</div>
@@ -418,14 +418,14 @@ export default function StockDetail() {
                     { label: "情绪", v: rating.sentiment_score },
                   ].map((d) => (
                     <div key={d.label}>
-                      <div className="text-gray-500">{d.label}</div>
+                      <div className="text-dim">{d.label}</div>
                       <div className="text-sm font-mono">{d.v?.toFixed(0) || "--"}</div>
                     </div>
                   ))}
                 </div>
               </div>
               {rating.reason && (
-                <p className="mt-3 text-sm text-gray-400">{rating.reason}</p>
+                <p className="mt-3 text-sm text-muted">{rating.reason}</p>
               )}
             </div>
           )}
@@ -433,10 +433,10 @@ export default function StockDetail() {
           {/* AI 分析报告 */}
           {analysis && (
             <>
-              <div className="bg-gray-900 rounded-xl p-5 border border-gray-800">
+              <div className="bg-card rounded-xl p-5 border border-edge">
                 <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-sm font-semibold text-gray-400">AI 分析报告</h3>
-                  <span className={`px-3 py-1 text-sm rounded-full border ${signalColor[analysis.signal] || "text-gray-400"}`}>
+                  <h3 className="text-sm font-semibold text-muted">AI 分析报告</h3>
+                  <span className={`px-3 py-1 text-sm rounded-full border ${signalColor[analysis.signal] || "text-muted"}`}>
                     {analysis.signal} · {analysis.score?.toFixed(0)}分
                   </span>
                 </div>
@@ -445,14 +445,14 @@ export default function StockDetail() {
 
               <div className="grid grid-cols-2 gap-4">
                 {analysis.target_price != null && (
-                  <div className="bg-gray-900 rounded-xl p-4 border border-gray-800">
-                    <div className="text-xs text-gray-500 mb-1">目标价</div>
+                  <div className="bg-card rounded-xl p-4 border border-edge">
+                    <div className="text-xs text-dim mb-1">目标价</div>
                     <div className="text-xl font-bold text-up">{analysis.target_price.toFixed(2)}</div>
                   </div>
                 )}
                 {analysis.stop_loss != null && (
-                  <div className="bg-gray-900 rounded-xl p-4 border border-gray-800">
-                    <div className="text-xs text-gray-500 mb-1">止损价</div>
+                  <div className="bg-card rounded-xl p-4 border border-edge">
+                    <div className="text-xs text-dim mb-1">止损价</div>
                     <div className="text-xl font-bold text-down">{analysis.stop_loss.toFixed(2)}</div>
                   </div>
                 )}
@@ -465,25 +465,25 @@ export default function StockDetail() {
                   { title: "基本面", content: analysis.fundamental_view },
                   { title: "新闻影响", content: analysis.news_impact },
                 ].map((sec) => (
-                  <div key={sec.title} className="bg-gray-900 rounded-xl p-4 border border-gray-800">
-                    <h4 className="text-xs font-semibold text-gray-500 mb-2">{sec.title}</h4>
-                    <p className="text-sm text-gray-300 whitespace-pre-line">{sec.content || "暂无"}</p>
+                  <div key={sec.title} className="bg-card rounded-xl p-4 border border-edge">
+                    <h4 className="text-xs font-semibold text-dim mb-2">{sec.title}</h4>
+                    <p className="text-sm text-secondary whitespace-pre-line">{sec.content || "暂无"}</p>
                   </div>
                 ))}
               </div>
 
               {/* 要点 & 风险 */}
               <div className="grid grid-cols-2 gap-4">
-                <div className="bg-gray-900 rounded-xl p-4 border border-gray-800">
-                  <h4 className="text-xs font-semibold text-gray-500 mb-2">关键要点</h4>
+                <div className="bg-card rounded-xl p-4 border border-edge">
+                  <h4 className="text-xs font-semibold text-dim mb-2">关键要点</h4>
                   <ul className="space-y-1">
                     {(analysis.key_points || []).map((p, i) => (
-                      <li key={i} className="text-sm text-gray-300">• {p}</li>
+                      <li key={i} className="text-sm text-secondary">• {p}</li>
                     ))}
                   </ul>
                 </div>
-                <div className="bg-gray-900 rounded-xl p-4 border border-gray-800">
-                  <h4 className="text-xs font-semibold text-gray-500 mb-2">风险提示</h4>
+                <div className="bg-card rounded-xl p-4 border border-edge">
+                  <h4 className="text-xs font-semibold text-dim mb-2">风险提示</h4>
                   <ul className="space-y-1">
                     {(analysis.risk_warnings || []).map((w, i) => (
                       <li key={i} className="text-sm text-yellow-400/80">⚠ {w}</li>
@@ -496,18 +496,18 @@ export default function StockDetail() {
               {(analysis.sentiment_context || analysis.position_advice) && (
                 <div className="grid grid-cols-2 gap-4">
                   {analysis.sentiment_context && (
-                    <div className="bg-gray-900 rounded-xl p-4 border border-gray-800">
-                      <h4 className="text-xs font-semibold text-gray-500 mb-2">情绪周期</h4>
+                    <div className="bg-card rounded-xl p-4 border border-edge">
+                      <h4 className="text-xs font-semibold text-dim mb-2">情绪周期</h4>
                       <div className="text-sm space-y-1">
                         <div>当前周期: <span className="font-medium">{analysis.sentiment_context.current_cycle}</span></div>
                         <div>建议策略: {analysis.sentiment_context.applicable_strategy}</div>
-                        <div className="text-gray-500">{analysis.sentiment_context.strategy_reason}</div>
+                        <div className="text-dim">{analysis.sentiment_context.strategy_reason}</div>
                       </div>
                     </div>
                   )}
                   {analysis.position_advice && (
-                    <div className="bg-gray-900 rounded-xl p-4 border border-gray-800">
-                      <h4 className="text-xs font-semibold text-gray-500 mb-2">仓位建议</h4>
+                    <div className="bg-card rounded-xl p-4 border border-edge">
+                      <h4 className="text-xs font-semibold text-dim mb-2">仓位建议</h4>
                       <div className="text-sm space-y-1">
                         <div>建议仓位: <span className="font-medium">{analysis.position_advice.suggested_size}</span></div>
                         <div>进场方式: {analysis.position_advice.entry_type}</div>

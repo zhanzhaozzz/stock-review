@@ -1,14 +1,89 @@
 @import "tailwindcss";
 
+/* ===== Theme Variables ===== */
 :root {
   --color-up: #ef4444;
   --color-down: #22c55e;
   --color-flat: #9ca3af;
+
+  /* Light theme (default) */
+  --bg-base: #f5f5f5;
+  --bg-card: #ffffff;
+  --bg-card-hover: #f9fafb;
+  --bg-sidebar: #1e293b;
+  --bg-sidebar-hover: rgba(255, 255, 255, 0.08);
+  --bg-sidebar-active: rgba(255, 255, 255, 0.12);
+  --bg-input: #f3f4f6;
+  --bg-badge: #f3f4f6;
+  --bg-overlay: rgba(0, 0, 0, 0.3);
+  --bg-drawer: #ffffff;
+  --text-primary: #111827;
+  --text-secondary: #374151;
+  --text-muted: #6b7280;
+  --text-dim: #9ca3af;
+  --text-sidebar: #e2e8f0;
+  --text-sidebar-muted: #94a3b8;
+  --border-base: #e5e7eb;
+  --border-light: #f3f4f6;
+  --accent: #2563eb;
+  --accent-hover: #1d4ed8;
+  --scrollbar-thumb: #d1d5db;
 }
 
+.dark {
+  --bg-base: #030712;
+  --bg-card: #111827;
+  --bg-card-hover: rgba(31, 41, 55, 0.5);
+  --bg-sidebar: #111827;
+  --bg-sidebar-hover: rgba(31, 41, 55, 0.5);
+  --bg-sidebar-active: #1f2937;
+  --bg-input: #1f2937;
+  --bg-badge: rgba(31, 41, 55, 0.6);
+  --bg-overlay: rgba(0, 0, 0, 0.6);
+  --bg-drawer: #030712;
+  --text-primary: #f3f4f6;
+  --text-secondary: #d1d5db;
+  --text-muted: #9ca3af;
+  --text-dim: #6b7280;
+  --text-sidebar: #e2e8f0;
+  --text-sidebar-muted: #94a3b8;
+  --border-base: #1f2937;
+  --border-light: rgba(31, 41, 55, 0.5);
+  --accent: #3b82f6;
+  --accent-hover: #2563eb;
+  --scrollbar-thumb: #374151;
+}
+
+/* ===== Tailwind v4 theme extension ===== */
+@theme {
+  --color-base: var(--bg-base);
+  --color-card: var(--bg-card);
+  --color-card-hover: var(--bg-card-hover);
+  --color-sidebar: var(--bg-sidebar);
+  --color-sidebar-hover: var(--bg-sidebar-hover);
+  --color-sidebar-active: var(--bg-sidebar-active);
+  --color-input: var(--bg-input);
+  --color-badge: var(--bg-badge);
+  --color-overlay: var(--bg-overlay);
+  --color-drawer: var(--bg-drawer);
+  --color-primary: var(--text-primary);
+  --color-secondary: var(--text-secondary);
+  --color-muted: var(--text-muted);
+  --color-dim: var(--text-dim);
+  --color-sidebar-text: var(--text-sidebar);
+  --color-sidebar-muted: var(--text-sidebar-muted);
+  --color-edge: var(--border-base);
+  --color-edge-light: var(--border-light);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+}
+
+/* ===== Base styles ===== */
 body {
-  @apply bg-gray-950 text-gray-100 antialiased;
+  background-color: var(--bg-base);
+  color: var(--text-primary);
   font-family: "Inter", system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
 
 /* 中国市场涨红跌绿 */
@@ -19,13 +94,13 @@ body {
 .bg-down { background-color: var(--color-down); }
 
 /* 情绪周期颜色 */
-.cycle-ice { @apply text-blue-400 bg-blue-950; }
-.cycle-chaos-low { @apply text-gray-400 bg-gray-800; }
-.cycle-start { @apply text-emerald-400 bg-emerald-950; }
-.cycle-ferment { @apply text-lime-400 bg-lime-950; }
-.cycle-climax { @apply text-red-400 bg-red-950; }
-.cycle-chaos-high { @apply text-yellow-400 bg-yellow-950; }
-.cycle-retreat { @apply text-orange-400 bg-orange-950; }
+.cycle-ice { @apply text-blue-400; background-color: rgba(30, 58, 138, 0.3); }
+.cycle-chaos-low { color: var(--text-muted); background-color: var(--bg-badge); }
+.cycle-start { @apply text-emerald-400; background-color: rgba(6, 78, 59, 0.3); }
+.cycle-ferment { @apply text-lime-400; background-color: rgba(54, 83, 20, 0.3); }
+.cycle-climax { @apply text-red-400; background-color: rgba(127, 29, 29, 0.3); }
+.cycle-chaos-high { @apply text-yellow-400; background-color: rgba(113, 63, 18, 0.3); }
+.cycle-retreat { @apply text-orange-400; background-color: rgba(124, 45, 18, 0.3); }
 
 /* 右侧抽屉滑入动画 */
 @keyframes slide-in-right {
@@ -39,4 +114,7 @@ body {
 /* Scrollbar */
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { @apply bg-gray-700 rounded-full; }
+::-webkit-scrollbar-thumb {
+  background-color: var(--scrollbar-thumb);
+  border-radius: 9999px;
+}

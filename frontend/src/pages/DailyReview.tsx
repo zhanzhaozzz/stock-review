@@ -154,7 +154,7 @@ export default function DailyReview() {
           {isHistoryMode && (
             <button
               onClick={() => navigate("/review/history")}
-              className="px-3 py-1.5 text-sm bg-gray-800 hover:bg-gray-700 rounded-lg transition"
+              className="px-3 py-1.5 text-sm bg-input hover:bg-card-hover rounded-lg transition"
             >
               &larr; 返回历史
             </button>
@@ -176,7 +176,7 @@ export default function DailyReview() {
           <button
             onClick={() => handleSave(false)}
             disabled={saving || !review}
-            className="px-3 py-1.5 text-sm bg-gray-800 hover:bg-gray-700 disabled:opacity-50 rounded-lg transition"
+            className="px-3 py-1.5 text-sm bg-input hover:bg-card-hover disabled:opacity-50 rounded-lg transition"
           >
             {saving ? "保存中..." : "保存"}
           </button>
@@ -191,30 +191,30 @@ export default function DailyReview() {
       </div>
 
       {loading ? (
-        <div className="text-gray-500 text-center py-20">加载中...</div>
+        <div className="text-dim text-center py-20">加载中...</div>
       ) : !review ? (
-        <div className="text-gray-500 text-center py-20">
+        <div className="text-dim text-center py-20">
           {isHistoryMode ? (
             <>
               <p>{dateParam} 无复盘记录</p>
-              <p className="text-xs mt-2 text-gray-600">该日期没有生成过复盘</p>
+              <p className="text-xs mt-2 text-dim">该日期没有生成过复盘</p>
             </>
           ) : (
             <>
               <p>今日暂无复盘</p>
-              <p className="text-xs mt-2 text-gray-600">点击"生成草稿"从梯队+情绪周期生成复盘草稿</p>
+              <p className="text-xs mt-2 text-dim">点击"生成草稿"从梯队+情绪周期生成复盘草稿</p>
             </>
           )}
         </div>
       ) : (
         <>
           {/* 状态栏 */}
-          <div className="bg-gray-900 rounded-xl p-5 border border-gray-800">
+          <div className="bg-card rounded-xl p-5 border border-edge">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <span className="font-mono text-sm">{review.date}</span>
                 {phase && (
-                  <span className={`px-3 py-1 text-sm rounded-full border ${phaseColors[phase] || "border-gray-700 text-gray-400"}`}>
+                  <span className={`px-3 py-1 text-sm rounded-full border ${phaseColors[phase] || "border-edge text-muted"}`}>
                     {phase}
                   </span>
                 )}
@@ -224,12 +224,12 @@ export default function DailyReview() {
                   </span>
                 )}
               </div>
-              <div className="text-xs text-gray-500">
+              <div className="text-xs text-dim">
                 主线: {review.main_sector || "—"} · 龙头: {review.market_leader || ladder?.market_leader?.name || "—"}
               </div>
             </div>
             {review.sentiment_detail && (
-              <div className="mt-3 text-sm text-gray-400 whitespace-pre-line">
+              <div className="mt-3 text-sm text-muted whitespace-pre-line">
                 {review.sentiment_detail}
               </div>
             )}
@@ -243,20 +243,20 @@ export default function DailyReview() {
               { label: "首板数", value: review.first_board_count, cls: "text-white" },
               { label: "炸板数", value: review.broken_board_count, cls: "text-yellow-300" },
             ].map((c) => (
-              <div key={c.label} className="bg-gray-900 rounded-xl p-4 border border-gray-800 text-center">
+              <div key={c.label} className="bg-card rounded-xl p-4 border border-edge text-center">
                 <div className={`text-2xl font-bold ${c.cls}`}>{c.value ?? 0}</div>
-                <div className="text-xs text-gray-500">{c.label}</div>
+                <div className="text-xs text-dim">{c.label}</div>
               </div>
             ))}
           </div>
 
           {/* 情绪周期选择 + 盘面过程 */}
-          <div className="bg-gray-900 rounded-xl p-5 border border-gray-800 space-y-4">
+          <div className="bg-card rounded-xl p-5 border border-edge space-y-4">
             <div className="grid grid-cols-3 gap-4">
               <div>
-                <label className="text-xs text-gray-500 block mb-1">情绪周期（可改）</label>
+                <label className="text-xs text-dim block mb-1">情绪周期（可改）</label>
                 <select
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm"
+                  className="w-full bg-input border border-edge rounded-lg px-3 py-2 text-sm"
                   value={form.market_sentiment || ""}
                   onChange={(e) => setForm((p) => ({ ...p, market_sentiment: e.target.value }))}
                 >
@@ -267,9 +267,9 @@ export default function DailyReview() {
                 </select>
               </div>
               <div>
-                <label className="text-xs text-gray-500 block mb-1">行情类型</label>
+                <label className="text-xs text-dim block mb-1">行情类型</label>
                 <select
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm"
+                  className="w-full bg-input border border-edge rounded-lg px-3 py-2 text-sm"
                   value={form.market_action || ""}
                   onChange={(e) => setForm((p) => ({ ...p, market_action: e.target.value }))}
                 >
@@ -280,9 +280,9 @@ export default function DailyReview() {
                 </select>
               </div>
               <div>
-                <label className="text-xs text-gray-500 block mb-1">盘面结果</label>
+                <label className="text-xs text-dim block mb-1">盘面结果</label>
                 <select
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm"
+                  className="w-full bg-input border border-edge rounded-lg px-3 py-2 text-sm"
                   value={form.market_result || ""}
                   onChange={(e) => setForm((p) => ({ ...p, market_result: e.target.value }))}
                 >
@@ -296,18 +296,18 @@ export default function DailyReview() {
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="text-xs text-gray-500 block mb-1">适用战法</label>
+                <label className="text-xs text-dim block mb-1">适用战法</label>
                 <input
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm"
+                  className="w-full bg-input border border-edge rounded-lg px-3 py-2 text-sm"
                   value={form.applicable_strategy || ""}
                   onChange={(e) => setForm((p) => ({ ...p, applicable_strategy: e.target.value }))}
                   placeholder="例如：擒龙/补涨套利/回流低吸/试错轻仓"
                 />
               </div>
               <div>
-                <label className="text-xs text-gray-500 block mb-1">建议仓位</label>
+                <label className="text-xs text-dim block mb-1">建议仓位</label>
                 <input
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm"
+                  className="w-full bg-input border border-edge rounded-lg px-3 py-2 text-sm"
                   value={form.suggested_position || ""}
                   onChange={(e) => setForm((p) => ({ ...p, suggested_position: e.target.value }))}
                   placeholder="例如：1/4仓、半仓"
@@ -317,20 +317,20 @@ export default function DailyReview() {
           </div>
 
           {/* 梯队数据 */}
-          <div className="bg-gray-900 rounded-xl border border-gray-800 overflow-hidden">
-            <div className="px-5 py-3 border-b border-gray-800 flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-gray-400">涨停/连板梯队（替代截图）</h3>
-              <div className="text-xs text-gray-500">来源：AKShare → SQLite 快照</div>
+          <div className="bg-card rounded-xl border border-edge overflow-hidden">
+            <div className="px-5 py-3 border-b border-edge flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-muted">涨停/连板梯队（替代截图）</h3>
+              <div className="text-xs text-dim">来源：AKShare → SQLite 快照</div>
             </div>
             {!ladderLevels.length ? (
-              <div className="text-gray-500 text-center py-16">暂无梯队数据（请先同步市场数据或执行复盘）</div>
+              <div className="text-dim text-center py-16">暂无梯队数据（请先同步市场数据或执行复盘）</div>
             ) : (
-              <div className="divide-y divide-gray-800">
+              <div className="divide-y divide-edge">
                 {ladderLevels.map((lv) => (
                   <div key={lv.level} className="p-5">
                     <div className="flex items-center justify-between mb-3">
                       <div className="text-sm font-semibold">
-                        {lv.level} 板 <span className="text-gray-500 text-xs">({lv.count}只)</span>
+                        {lv.level} 板 <span className="text-dim text-xs">({lv.count}只)</span>
                       </div>
                       {ladder?.market_leader?.board_count === lv.level && (
                         <div className="text-xs px-2 py-0.5 rounded bg-red-500/10 text-red-300 border border-red-500/30">
@@ -342,12 +342,12 @@ export default function DailyReview() {
                       {(lv.stocks || []).slice(0, 12).map((s) => (
                         <div
                           key={s.code}
-                          className="bg-gray-950 border border-gray-800 rounded-lg p-3 cursor-pointer hover:border-blue-500/50 hover:bg-gray-900 transition"
+                          className="bg-base border border-edge rounded-lg p-3 cursor-pointer hover:border-blue-500/50 hover:bg-card transition"
                           onClick={() => setSelectedStock({ code: s.code, name: s.name, sector: s.sector })}
                         >
                           <div className="text-sm font-mono">{s.code}</div>
                           <div className="text-sm font-medium truncate">{s.name}</div>
-                          <div className="text-xs text-gray-500 truncate">{s.sector || "—"}</div>
+                          <div className="text-xs text-dim truncate">{s.sector || "—"}</div>
                           <div className="text-xs mt-1 text-up">+{(s.change_pct ?? 0).toFixed(1)}%</div>
                         </div>
                       ))}
@@ -360,39 +360,39 @@ export default function DailyReview() {
 
           {/* 复盘总结（AI 草稿对比 + 可编辑） */}
           <div className="grid grid-cols-2 gap-4">
-            <div className="bg-gray-900 rounded-xl p-5 border border-gray-800">
+            <div className="bg-card rounded-xl p-5 border border-edge">
               <div className="flex items-center justify-between mb-2">
-                <h3 className="text-sm font-semibold text-gray-400">AI 草稿</h3>
+                <h3 className="text-sm font-semibold text-muted">AI 草稿</h3>
                 <button
                   onClick={adoptAiDraft}
-                  className="px-3 py-1 text-xs bg-gray-800 hover:bg-gray-700 rounded-lg transition"
+                  className="px-3 py-1 text-xs bg-input hover:bg-card-hover rounded-lg transition"
                 >
                   采纳 AI 建议
                 </button>
               </div>
-              <div className="text-sm text-gray-400 whitespace-pre-line">
+              <div className="text-sm text-muted whitespace-pre-line">
                 {(review.ai_review_draft || review.review_summary || "暂无").trim()}
               </div>
-              <div className="mt-4 text-xs text-gray-500">次日建议：</div>
-              <div className="text-sm text-gray-400 whitespace-pre-line">
+              <div className="mt-4 text-xs text-dim">次日建议：</div>
+              <div className="text-sm text-muted whitespace-pre-line">
                 {(review.ai_next_day_suggestion || review.next_day_plan || "暂无").trim()}
               </div>
             </div>
-            <div className="bg-gray-900 rounded-xl p-5 border border-gray-800 space-y-3">
-              <h3 className="text-sm font-semibold text-gray-400">人工编辑区</h3>
+            <div className="bg-card rounded-xl p-5 border border-edge space-y-3">
+              <h3 className="text-sm font-semibold text-muted">人工编辑区</h3>
               <div>
-                <label className="text-xs text-gray-500 block mb-1">复盘总结</label>
+                <label className="text-xs text-dim block mb-1">复盘总结</label>
                 <textarea
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm min-h-[140px]"
+                  className="w-full bg-input border border-edge rounded-lg px-3 py-2 text-sm min-h-[140px]"
                   value={form.review_summary || ""}
                   onChange={(e) => setForm((p) => ({ ...p, review_summary: e.target.value }))}
                   placeholder="修改/补充你的最终复盘总结"
                 />
               </div>
               <div>
-                <label className="text-xs text-gray-500 block mb-1">次日计划</label>
+                <label className="text-xs text-dim block mb-1">次日计划</label>
                 <textarea
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm min-h-[120px]"
+                  className="w-full bg-input border border-edge rounded-lg px-3 py-2 text-sm min-h-[120px]"
                   value={form.next_day_plan || ""}
                   onChange={(e) => setForm((p) => ({ ...p, next_day_plan: e.target.value }))}
                   placeholder="写下次日操作模式/计划/仓位控制"

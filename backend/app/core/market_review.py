@@ -128,6 +128,56 @@ async def get_sector_ranking(sector_type: str = "concept", limit: int = 30) -> l
         return []
 
 
+async def get_sector_constituents(board_name: str, limit: int = 30) -> list[dict]:
+    """获取概念板块的成分股列表。"""
+    from app.cache import cache_get, cache_set
+    import akshare as ak
+
+    cache_key = f"sr:sector:cons:{board_name}"
+    cached = await cache_get(cache_key)
+    if cached:
+        return cached[:limit]
+
+    try:
+        df = ak.stock_board_concept_cons_em(symbol=board_name)
+        if df is None or df.empty:
+            return []
+
+        col_map = {
+            "代码": "code",
+            "名称": "name",
+            "最新价": "price",
+            "涨跌幅": "change_pct",
+            "成交量": "volume",
+            "成交额": "amount",
+            "换手率": "turnover_rate",
+            "最高": "high",
+            "最低": "low",
+        }
+        df = df.rename(columns={k: v for k, v in col_map.items() if k in df.columns})
+
+        result = []
+        for _, row in df.iterrows():
+            item = {
+                "code": str(row.get("code", "")),
+                "name": str(row.get("name", "")),
+                "price": float(row.get("price", 0) or 0),
+                "change_pct": float(row.get("change_pct", 0) or 0),
+                "volume": float(row.get("volume", 0) or 0),
+                "amount": float(row.get("amount", 0) or 0),
+                "turnover_rate": float(row.get("turnover_rate", 0) or 0),
+            }
+            result.append(item)
+
+        result.sort(key=lambda x: x["change_pct"], reverse=True)
+        await cache_set(cache_key, result, ttl=300)
+        return result[:limit]
+
+    except Exception as e:
+        logger.warning("get_sector_constituents(%s) failed: %s", board_name, e)
+        return []
+
+
 async def get_money_flow() -> list[dict]:
     """行业资金流向。"""
     import akshare as ak

@@ -27,7 +27,7 @@ const RATING_COLORS: Record<string, string> = {
   "推荐": "text-orange-400",
   "中性": "text-yellow-400",
   "谨慎": "text-blue-400",
-  "回避": "text-gray-500",
+  "回避": "text-dim",
 };
 
 export default function Watchlist() {
@@ -126,7 +126,7 @@ export default function Watchlist() {
           </button>
           <button
             onClick={loadData}
-            className="px-3 py-1.5 text-sm bg-gray-800 hover:bg-gray-700 rounded-lg transition"
+            className="px-3 py-1.5 text-sm bg-input hover:bg-card-hover rounded-lg transition"
           >
             刷新
           </button>
@@ -135,19 +135,19 @@ export default function Watchlist() {
 
       {/* 搜索添加 */}
       {showSearch && (
-        <div className="bg-gray-900 rounded-xl p-4 border border-gray-800 space-y-3">
+        <div className="bg-card rounded-xl p-4 border border-edge space-y-3">
           <div className="flex gap-3">
             <input
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleSearch()}
               placeholder="搜索股票代码或名称"
-              className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
+              className="flex-1 bg-input border border-edge rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
             />
             <button
               onClick={handleSearch}
               disabled={searching}
-              className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-sm rounded-lg transition"
+              className="px-4 py-2 bg-input hover:bg-card-hover text-sm rounded-lg transition"
             >
               {searching ? "搜索中..." : "搜索"}
             </button>
@@ -157,11 +157,11 @@ export default function Watchlist() {
               {searchResults.map((r) => (
                 <div
                   key={r.code}
-                  className="flex items-center justify-between px-3 py-2 bg-gray-800/50 rounded hover:bg-gray-800"
+                  className="flex items-center justify-between px-3 py-2 bg-card-hover rounded hover:bg-input"
                 >
                   <div>
                     <span className="font-medium">{r.name}</span>
-                    <span className="text-xs text-gray-500 ml-2">{r.code}</span>
+                    <span className="text-xs text-dim ml-2">{r.code}</span>
                   </div>
                   <button
                     onClick={() => addStock(r.code)}
@@ -184,7 +184,7 @@ export default function Watchlist() {
             className={`px-3 py-1 text-sm rounded-lg transition ${
               !activeGroup
                 ? "bg-blue-600 text-white"
-                : "bg-gray-800 text-gray-400 hover:bg-gray-700"
+                : "bg-input text-muted hover:bg-card-hover"
             }`}
           >
             全部
@@ -196,7 +196,7 @@ export default function Watchlist() {
               className={`px-3 py-1 text-sm rounded-lg transition ${
                 activeGroup === g
                   ? "bg-blue-600 text-white"
-                  : "bg-gray-800 text-gray-400 hover:bg-gray-700"
+                  : "bg-input text-muted hover:bg-card-hover"
               }`}
             >
               {g}
@@ -206,20 +206,20 @@ export default function Watchlist() {
       )}
 
       {loading ? (
-        <div className="text-gray-500 text-center py-20">加载中...</div>
+        <div className="text-dim text-center py-20">加载中...</div>
       ) : items.length === 0 ? (
-        <div className="text-gray-500 text-center py-20">
+        <div className="text-dim text-center py-20">
           <p>自选股为空，点击"添加股票"开始添加</p>
-          <p className="text-xs mt-2 text-gray-600">
+          <p className="text-xs mt-2 text-dim">
             添加后点击"同步行情"从外部采集行情数据存入数据库
           </p>
         </div>
       ) : (
-        <div className="bg-gray-900 rounded-xl border border-gray-800">
+        <div className="bg-card rounded-xl border border-edge">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="text-gray-500 border-b border-gray-800">
+                <tr className="text-dim border-b border-edge">
                   <th className="text-left px-4 py-3">股票</th>
                   <th className="text-right px-4 py-3">最新价</th>
                   <th className="text-right px-4 py-3">涨跌幅</th>
@@ -233,12 +233,12 @@ export default function Watchlist() {
                 {items.map((item) => (
                   <tr
                     key={item.code}
-                    className="border-b border-gray-800/50 hover:bg-gray-800/30 cursor-pointer"
+                    className="border-b border-edge-light hover:bg-card-hover cursor-pointer"
                     onClick={() => setSelectedStock({ code: item.code, name: item.name })}
                   >
                     <td className="px-4 py-3">
                       <div className="font-medium">{item.name}</div>
-                      <div className="text-xs text-gray-500">{item.code}</div>
+                      <div className="text-xs text-dim">{item.code}</div>
                     </td>
                     <td className="px-4 py-3 text-right font-mono">
                       {item.price?.toFixed(2) ?? "--"}
@@ -247,7 +247,7 @@ export default function Watchlist() {
                       className={`px-4 py-3 text-right font-mono ${
                         item.change_pct != null
                           ? getPctColor(item.change_pct)
-                          : "text-gray-500"
+                          : "text-dim"
                       }`}
                     >
                       {item.change_pct != null
@@ -261,16 +261,16 @@ export default function Watchlist() {
                       {item.latest_label ? (
                         <span
                           className={`text-xs font-medium ${
-                            RATING_COLORS[item.latest_label] || "text-gray-400"
+                            RATING_COLORS[item.latest_label] || "text-muted"
                           }`}
                         >
                           {item.latest_label}
                         </span>
                       ) : (
-                        <span className="text-xs text-gray-600">未评级</span>
+                        <span className="text-xs text-dim">未评级</span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-xs text-gray-500">
+                    <td className="px-4 py-3 text-xs text-dim">
                       {item.group_name}
                     </td>
                     <td className="px-4 py-3 text-center">
