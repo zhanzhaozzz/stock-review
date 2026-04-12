@@ -70,22 +70,36 @@ async def run_review(db: AsyncSession = Depends(get_db)):
 
     review_obj = DailyReview(
         date=today,
+        status=result.get("status", "draft"),
         market_sentiment=result.get("market_sentiment", ""),
+        sentiment_cycle_main=result.get("sentiment_cycle_main", ""),
         market_height=result.get("market_height", 0),
         market_leader=leader_name,
+        dragon_stock=result.get("dragon_stock", leader_name),
+        core_middle_stock=result.get("core_middle_stock", ""),
+        market_ladder=result.get("market_ladder", ""),
+        total_volume=result.get("total_volume", ""),
         total_limit_up=result.get("total_limit_up", 0),
         first_board_count=result.get("first_board_count", 0),
         broken_board_count=result.get("broken_board_count", 0),
         sentiment_detail=ai_reason,
         main_sector=result.get("main_sector", ""),
         sub_sector=result.get("sub_sector", ""),
+        main_sectors=result.get("main_sectors", ""),
+        sub_sectors=result.get("sub_sectors", ""),
+        market_style=result.get("market_style", ""),
         broken_boards=result.get("broken_boards", ""),
+        broken_high_stock=result.get("broken_high_stock", ""),
+        conclusion_quadrant=result.get("conclusion_quadrant", ""),
         review_summary=result.get("review_summary", ""),
         next_day_plan=result.get("next_day_plan", ""),
+        next_day_prediction=result.get("next_day_prediction", ""),
+        next_day_mode=result.get("next_day_mode", ""),
         applicable_strategy=result.get("applicable_strategy", ""),
         suggested_position=result.get("suggested_position", ""),
         ai_review_draft=result.get("review_summary", ""),
         ai_next_day_suggestion=result.get("next_day_plan", ""),
+        is_confirmed=(result.get("status", "draft") == "published"),
     )
     db.add(review_obj)
 
@@ -115,9 +129,17 @@ async def generate_review(db: AsyncSession = Depends(get_db)):
 async def today_review(db: AsyncSession = Depends(get_db)):
     """获取今日复盘（不存在则 404）。"""
     today = date.today()
-    stmt = select(DailyReview).where(DailyReview.date == today).limit(1)
-    result = await db.execute(stmt)
-    r = result.scalar_one_or_none()
+    draft_stmt = (
+        select(DailyReview)
+        .where(DailyReview.date == today, DailyReview.status == "draft")
+        .limit(1)
+    )
+    draft_result = await db.execute(draft_stmt)
+    r = draft_result.scalar_one_or_none()
+    if not r:
+        stmt = select(DailyReview).where(DailyReview.date == today).limit(1)
+        result = await db.execute(stmt)
+        r = result.scalar_one_or_none()
     if not r:
         raise HTTPException(status_code=404, detail="今日复盘不存在")
     return _to_review_item(r)
@@ -241,7 +263,12 @@ async def update_review(
     if not r:
         raise HTTPException(status_code=404, detail="复盘不存在")
 
-    for field, value in req.model_dump(exclude_none=True).items():
+    payload = req.model_dump(exclude_none=True)
+    if "is_confirmed" in payload and "status" not in payload:
+        payload["status"] = "published" if payload["is_confirmed"] else "draft"
+    if "status" in payload and "is_confirmed" not in payload:
+        payload["is_confirmed"] = payload["status"] == "published"
+    for field, value in payload.items():
         setattr(r, field, value)
 
     await db.commit()
@@ -252,17 +279,30 @@ def _to_review_item(r: DailyReview) -> DailyReviewItem:
     return DailyReviewItem(
         id=r.id,
         date=str(r.date),
+        status=r.status or ("published" if r.is_confirmed else "draft"),
         market_sentiment=r.market_sentiment or "",
+        sentiment_cycle_main=r.sentiment_cycle_main or r.market_sentiment or "",
         market_height=r.market_height or 0,
         market_leader=r.market_leader or "",
+        dragon_stock=r.dragon_stock or r.market_leader or "",
+        core_middle_stock=r.core_middle_stock or "",
+        market_ladder=r.market_ladder or "",
+        total_volume=r.total_volume or "",
         total_limit_up=r.total_limit_up or 0,
         first_board_count=r.first_board_count or 0,
         broken_board_count=r.broken_board_count or 0,
         sentiment_detail=r.sentiment_detail or "",
         main_sector=r.main_sector or "",
         sub_sector=r.sub_sector or "",
+        main_sectors=r.main_sectors or r.main_sector or "",
+        sub_sectors=r.sub_sectors or r.sub_sector or "",
+        market_style=r.market_style or "",
+        broken_high_stock=r.broken_high_stock or "",
+        conclusion_quadrant=r.conclusion_quadrant or "",
         review_summary=r.review_summary or "",
         next_day_plan=r.next_day_plan or "",
+        next_day_prediction=r.next_day_prediction or r.next_day_plan or "",
+        next_day_mode=r.next_day_mode or "",
         applicable_strategy=r.applicable_strategy or "",
         suggested_position=r.suggested_position or "",
         ai_review_draft=r.ai_review_draft or "",

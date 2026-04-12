@@ -12,11 +12,17 @@ class DailyReview(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     date: Mapped[date] = mapped_column(Date, unique=True, index=True)
+    status: Mapped[str] = mapped_column(String(20), default="draft", index=True)
 
     # --- 市场情绪 ---
     market_sentiment: Mapped[str | None] = mapped_column(String(20))
+    sentiment_cycle_main: Mapped[str | None] = mapped_column(String(20))
     market_height: Mapped[int | None] = mapped_column(Integer)
     market_leader: Mapped[str | None] = mapped_column(String(100))
+    dragon_stock: Mapped[str | None] = mapped_column(String(100))
+    core_middle_stock: Mapped[str | None] = mapped_column(String(100))
+    market_ladder: Mapped[str | None] = mapped_column(Text)
+    total_volume: Mapped[str | None] = mapped_column(String(100))
     total_limit_up: Mapped[int | None] = mapped_column(Integer)
     first_board_count: Mapped[int | None] = mapped_column(Integer)
     broken_board_count: Mapped[int | None] = mapped_column(Integer)
@@ -25,13 +31,20 @@ class DailyReview(Base):
     # --- 板块 ---
     main_sector: Mapped[str | None] = mapped_column(String(200))
     sub_sector: Mapped[str | None] = mapped_column(String(200))
+    main_sectors: Mapped[str | None] = mapped_column(String(200))
+    sub_sectors: Mapped[str | None] = mapped_column(String(200))
+    market_style: Mapped[str | None] = mapped_column(String(200))
 
     # --- 断板高标 ---
     broken_boards: Mapped[str | None] = mapped_column(Text)
+    broken_high_stock: Mapped[str | None] = mapped_column(String(200))
 
     # --- 复盘内容 ---
     review_summary: Mapped[str | None] = mapped_column(Text)
     next_day_plan: Mapped[str | None] = mapped_column(Text)
+    next_day_prediction: Mapped[str | None] = mapped_column(Text)
+    next_day_mode: Mapped[str | None] = mapped_column(Text)
+    conclusion_quadrant: Mapped[str | None] = mapped_column(String(20))
     applicable_strategy: Mapped[str | None] = mapped_column(String(100))
     suggested_position: Mapped[str | None] = mapped_column(String(50))
 

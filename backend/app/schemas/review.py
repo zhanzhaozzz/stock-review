@@ -1,6 +1,10 @@
 """复盘相关 Pydantic 模型。"""
 from pydantic import BaseModel
-from typing import Optional
+from typing import Literal, Optional
+
+ReviewStatus = Literal["draft", "published"]
+SentimentCycleMain = Literal["启动期", "发酵期", "高潮期", "高位混沌期", "退潮期", "低位混沌期"]
+ConclusionQuadrant = Literal["情指共振", "情好指差", "情差指好", "情指双杀"]
 
 
 class ReviewRunRequest(BaseModel):
@@ -11,17 +15,30 @@ class ReviewRunRequest(BaseModel):
 class DailyReviewItem(BaseModel):
     id: int
     date: str
+    status: ReviewStatus = "draft"
     market_sentiment: str = ""
+    sentiment_cycle_main: str = ""
     market_height: int = 0
     market_leader: str = ""
+    dragon_stock: str = ""
+    core_middle_stock: str = ""
+    market_ladder: str = ""
+    total_volume: str = ""
     total_limit_up: int = 0
     first_board_count: int = 0
     broken_board_count: int = 0
     sentiment_detail: str = ""
     main_sector: str = ""
     sub_sector: str = ""
+    main_sectors: str = ""
+    sub_sectors: str = ""
+    market_style: str = ""
+    broken_high_stock: str = ""
+    conclusion_quadrant: str = ""
     review_summary: str = ""
     next_day_plan: str = ""
+    next_day_prediction: str = ""
+    next_day_mode: str = ""
     applicable_strategy: str = ""
     suggested_position: str = ""
     ai_review_draft: str = ""
@@ -34,10 +51,23 @@ class DailyReviewItem(BaseModel):
 
 class ReviewUpdateRequest(BaseModel):
     """用户编辑/确认复盘的请求。"""
+    status: Optional[ReviewStatus] = None
     market_sentiment: Optional[str] = None
+    sentiment_cycle_main: Optional[SentimentCycleMain] = None
+    dragon_stock: Optional[str] = None
+    core_middle_stock: Optional[str] = None
+    market_ladder: Optional[str] = None
+    total_volume: Optional[str] = None
     sentiment_detail: Optional[str] = None
+    main_sectors: Optional[str] = None
+    sub_sectors: Optional[str] = None
+    market_style: Optional[str] = None
+    broken_high_stock: Optional[str] = None
+    conclusion_quadrant: Optional[ConclusionQuadrant] = None
     review_summary: Optional[str] = None
     next_day_plan: Optional[str] = None
+    next_day_prediction: Optional[str] = None
+    next_day_mode: Optional[str] = None
     applicable_strategy: Optional[str] = None
     suggested_position: Optional[str] = None
     market_action: Optional[str] = None

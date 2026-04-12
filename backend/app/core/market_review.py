@@ -1,6 +1,6 @@
 """市场总览 — 大盘指数、涨跌面、板块排行、资金流向。"""
 import logging
-from datetime import datetime
+from datetime import date, datetime, timedelta
 
 logger = logging.getLogger(__name__)
 
@@ -199,3 +199,103 @@ async def get_money_flow() -> list[dict]:
     except Exception as e:
         logger.warning("get_money_flow failed: %s", e)
         return []
+
+
+async def get_total_volume_with_delta(target_date: str = "today") -> dict:
+    """获取沪深成交额与较上一交易日的增缩量。"""
+    import akshare as ak
+
+    try:
+        trade_day = _parse_trade_day(target_date)
+        start_day = trade_day - timedelta(days=15)
+        start_str = start_day.strftime("%Y%m%d")
+        end_str = trade_day.strftime("%Y%m%d")
+
+        sh_hist = ak.index_zh_a_hist(symbol="000001", period="daily", start_date=start_str, end_date=end_str)
+        sz_hist = ak.index_zh_a_hist(symbol="399001", period="daily", start_date=start_str, end_date=end_str)
+        if sh_hist is None or sh_hist.empty or sz_hist is None or sz_hist.empty:
+            return {"total_volume": "", "total_amount_yi": 0.0, "delta_amount_yi": 0.0, "trend": "平量"}
+
+        sh_vals = sh_hist["成交额"].dropna().tolist()
+        sz_vals = sz_hist["成交额"].dropna().tolist()
+        if len(sh_vals) < 2 or len(sz_vals) < 2:
+            return {"total_volume": "", "total_amount_yi": 0.0, "delta_amount_yi": 0.0, "trend": "平量"}
+
+        current_amount_yi = _to_yi(sh_vals[-1]) + _to_yi(sz_vals[-1])
+        prev_amount_yi = _to_yi(sh_vals[-2]) + _to_yi(sz_vals[-2])
+        delta_yi = current_amount_yi - prev_amount_yi
+        delta_sign = "+" if delta_yi >= 0 else ""
+        trend = "增量" if delta_yi > 0 else "缩量" if delta_yi < 0 else "平量"
+
+        return {
+            "total_volume": f"{current_amount_yi:.0f}亿 {delta_sign}{delta_yi:.0f}亿",
+            "total_amount_yi": round(current_amount_yi, 2),
+            "delta_amount_yi": round(delta_yi, 2),
+            "trend": trend,
+        }
+    except Exception as e:
+        logger.warning("get_total_volume_with_delta failed: %s", e)
+        return {"total_volume": "", "total_amount_yi": 0.0, "delta_amount_yi": 0.0, "trend": "平量"}
+
+
+async def get_daily_context(
+    target_date: str = "today",
+    limit_up_data_override: dict | None = None,
+    market_overview_override: dict | None = None,
+) -> dict:
+    """装配复盘 LLM 所需的客观盘面上下文。"""
+    from app.core.limit_up_tracker import get_limit_up_data
+
+    limit_up_data = limit_up_data_override or await get_limit_up_data(target_date)
+    market_overview = market_overview_override or await get_market_overview()
+    sector_ranking = await get_sector_ranking("concept", 10)
+    volume_info = await get_total_volume_with_delta(target_date)
+    breadth = market_overview.get("breadth", {}) if isinstance(market_overview, dict) else {}
+    ladder = limit_up_data.get("ladder", [])
+
+    ladder_summary = ", ".join(
+        f"{item.get('level', 0)}板{item.get('count', 0)}家"
+        for item in sorted(ladder, key=lambda x: x.get("level", 0), reverse=True)
+    )
+    dragon = limit_up_data.get("market_leader") or {}
+    sector_dist = limit_up_data.get("sector_distribution", {})
+    main_sector_names = list(sector_dist.keys())[:3]
+    sub_sector_names = list(sector_dist.keys())[3:6]
+
+    return {
+        "date": limit_up_data.get("date", str(_parse_trade_day(target_date))),
+        "market_height": int(limit_up_data.get("market_height", 0) or 0),
+        "dragon_stock": str(dragon.get("name", "") or ""),
+        "core_middle_stock": "",
+        "market_ladder": ladder_summary,
+        "market_ladder_detail": ladder,
+        "total_volume": volume_info.get("total_volume", ""),
+        "limit_down_count": int(limit_up_data.get("limit_down_count", 0) or breadth.get("limit_down", 0) or 0),
+        "promotion_rate": float(limit_up_data.get("promotion_rate", 0.0) or 0.0),
+        "promotion_rate_text": limit_up_data.get("promotion_rate_text", ""),
+        "main_sectors": ", ".join(main_sector_names),
+        "sub_sectors": ", ".join(sub_sector_names),
+        "market_overview": market_overview,
+        "sector_ranking": sector_ranking,
+        "limit_up_data": limit_up_data,
+    }
+
+
+def _to_yi(amount: float) -> float:
+    amount = float(amount or 0)
+    if abs(amount) >= 1_000_000:
+        return amount / 100_000_000
+    return amount
+
+
+def _parse_trade_day(target_date: str) -> date:
+    if target_date and target_date != "today":
+        try:
+            dt = datetime.fromisoformat(target_date).date()
+        except ValueError:
+            dt = date.today()
+    else:
+        dt = date.today()
+    while dt.weekday() >= 5:
+        dt -= timedelta(days=1)
+    return dt

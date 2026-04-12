@@ -78,12 +78,60 @@ async def _migrate_operation_records(conn):
     logger.info("operation_records migration completed")
 
 
+async def _migrate_daily_reviews(conn):
+    """兼容旧版 daily_reviews，补充 Phase1 MVP 新字段。"""
+    if not settings.database_url.startswith("sqlite"):
+        return
+
+    table_info = await conn.exec_driver_sql("PRAGMA table_info(daily_reviews)")
+    cols = [row[1] for row in table_info.fetchall()]
+    if not cols:
+        return
+
+    alter_statements = []
+    if "status" not in cols:
+        alter_statements.append("ALTER TABLE daily_reviews ADD COLUMN status VARCHAR(20) DEFAULT 'draft'")
+    if "sentiment_cycle_main" not in cols:
+        alter_statements.append("ALTER TABLE daily_reviews ADD COLUMN sentiment_cycle_main VARCHAR(20)")
+    if "dragon_stock" not in cols:
+        alter_statements.append("ALTER TABLE daily_reviews ADD COLUMN dragon_stock VARCHAR(100)")
+    if "core_middle_stock" not in cols:
+        alter_statements.append("ALTER TABLE daily_reviews ADD COLUMN core_middle_stock VARCHAR(100)")
+    if "market_ladder" not in cols:
+        alter_statements.append("ALTER TABLE daily_reviews ADD COLUMN market_ladder TEXT")
+    if "total_volume" not in cols:
+        alter_statements.append("ALTER TABLE daily_reviews ADD COLUMN total_volume VARCHAR(100)")
+    if "main_sectors" not in cols:
+        alter_statements.append("ALTER TABLE daily_reviews ADD COLUMN main_sectors VARCHAR(200)")
+    if "sub_sectors" not in cols:
+        alter_statements.append("ALTER TABLE daily_reviews ADD COLUMN sub_sectors VARCHAR(200)")
+    if "market_style" not in cols:
+        alter_statements.append("ALTER TABLE daily_reviews ADD COLUMN market_style VARCHAR(200)")
+    if "broken_high_stock" not in cols:
+        alter_statements.append("ALTER TABLE daily_reviews ADD COLUMN broken_high_stock VARCHAR(200)")
+    if "conclusion_quadrant" not in cols:
+        alter_statements.append("ALTER TABLE daily_reviews ADD COLUMN conclusion_quadrant VARCHAR(20)")
+    if "next_day_prediction" not in cols:
+        alter_statements.append("ALTER TABLE daily_reviews ADD COLUMN next_day_prediction TEXT")
+    if "next_day_mode" not in cols:
+        alter_statements.append("ALTER TABLE daily_reviews ADD COLUMN next_day_mode TEXT")
+
+    if not alter_statements:
+        return
+
+    logger.info("Migrating daily_reviews table with %d new columns", len(alter_statements))
+    for sql in alter_statements:
+        await conn.exec_driver_sql(sql)
+    logger.info("daily_reviews migration completed")
+
+
 async def init_db():
     """Create all tables."""
     from app.models import stock, rating, analysis, watchlist, news, review, strategy, sentiment, user, llm_usage, market, fundamental  # noqa: F401
 
     async with engine.begin() as conn:
         await _migrate_operation_records(conn)
+        await _migrate_daily_reviews(conn)
         await conn.run_sync(Base.metadata.create_all)
     logger.info("Database tables created successfully")
 

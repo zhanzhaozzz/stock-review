@@ -1,23 +1,18 @@
-"""每日复盘引擎 — 收集涨停梯队、情绪周期、主线板块等信息，生成复盘报告。
-
-工作流:
-  1. 获取涨停梯队数据 (limit_up_tracker)
-  2. 获取市场总览快照
-  3. 情绪周期判断 (sentiment_engine)
-  4. 识别主线板块
-  5. 可选: LLM 生成复盘总结
-  6. 组装完整复盘结果 → 写入 daily_reviews 表
-"""
+"""每日复盘引擎 — 基于客观数据 + LLM 生成结构化复盘草稿。"""
 import json
 import logging
 from datetime import date
-from typing import Optional
 
 from app.config import get_settings
+from app.core.market_review import get_daily_context
 from app.core.sentiment_engine import judge_cycle_with_ai
 from app.llm.client import chat
+from app.llm.prompts.review import REVIEW_SYSTEM_PROMPT, build_review_prompt
 
 logger = logging.getLogger(__name__)
+
+SENTIMENT_ENUM = {"启动期", "发酵期", "高潮期", "高位混沌期", "退潮期", "低位混沌期"}
+QUADRANT_ENUM = {"情指共振", "情好指差", "情差指好", "情指双杀"}
 
 
 async def generate_daily_review(
@@ -25,139 +20,147 @@ async def generate_daily_review(
     market_overview: dict = None,
     prev_phases: list[str] = None,
 ) -> dict:
-    """生成当天的复盘报告。"""
+    """生成当天的结构化复盘草稿（对齐 DailyReview 新字段）。"""
+    trade_date = limit_up_data.get("date") if isinstance(limit_up_data, dict) else "today"
+    daily_context = await get_daily_context(
+        target_date=trade_date,
+        limit_up_data_override=limit_up_data if isinstance(limit_up_data, dict) else None,
+        market_overview_override=market_overview if isinstance(market_overview, dict) else None,
+    )
 
-    cycle_result = await judge_cycle_with_ai(limit_up_data, market_overview, prev_phases)
+    limit_context = daily_context.get("limit_up_data", {})
+    market_ctx = daily_context.get("market_overview", {})
+    cycle_result = await judge_cycle_with_ai(limit_context, market_ctx, prev_phases)
 
-    main_sectors = _extract_main_sectors(limit_up_data)
-    sub_sectors = _extract_sub_sectors(limit_up_data)
-    broken_boards = limit_up_data.get("broken_boards", [])
+    llm_output = await _generate_structured_review(daily_context, cycle_result, prev_phases or [])
 
-    summary = ""
-    next_day_plan = ""
-    try:
-        summary, next_day_plan = await _generate_review_summary(
-            cycle_result, limit_up_data, market_overview, main_sectors, broken_boards,
-        )
-    except Exception as e:
-        logger.warning("AI review summary failed: %s", e)
+    sentiment_cycle_main = _normalize_sentiment(
+        llm_output.get("sentiment_cycle_main", ""),
+        cycle_result.get("phase", ""),
+    )
+    conclusion_quadrant = _normalize_quadrant(
+        llm_output.get("conclusion_quadrant", ""),
+        sentiment_cycle_main,
+    )
+    main_sectors = llm_output.get("main_sectors", "") or daily_context.get("main_sectors", "")
+    sub_sectors = llm_output.get("sub_sectors", "") or daily_context.get("sub_sectors", "")
+    market_style = llm_output.get("market_style", "")
+    broken_high_stock = llm_output.get("broken_high_stock", "")
+    next_day_prediction = llm_output.get("next_day_prediction", "")
+    next_day_mode = llm_output.get("next_day_mode", "")
+    core_middle_stock = llm_output.get("core_middle_stock", "") or daily_context.get("core_middle_stock", "")
+
+    broken_boards = limit_context.get("broken_boards", []) if isinstance(limit_context, dict) else []
+    total_limit_up = sum(item.get("count", 0) for item in limit_context.get("ladder", [])) if isinstance(limit_context, dict) else 0
+    first_board_count = int(limit_context.get("first_board_count", 0) or 0) if isinstance(limit_context, dict) else 0
+    broken_board_count = len(broken_boards)
+
+    review_summary = f"{sentiment_cycle_main}，{conclusion_quadrant}。{market_style}".strip("，。")
+    next_day_plan = "\n".join(x for x in [next_day_prediction, next_day_mode] if x).strip()
 
     return {
         "date": str(date.today()),
-        "market_sentiment": cycle_result.get("phase", "震荡"),
-        "sentiment_confidence": cycle_result.get("confidence", 0),
-        "market_height": cycle_result.get("height", 0),
-        "total_limit_up": cycle_result.get("total_limit_up", 0),
-        "first_board_count": cycle_result.get("first_board_count", 0),
-        "broken_board_count": cycle_result.get("broken_count", 0),
-        "main_sector": ", ".join(main_sectors[:3]) if main_sectors else "",
-        "sub_sector": ", ".join(sub_sectors[:3]) if sub_sectors else "",
+        "status": "draft",
+        "market_height": int(daily_context.get("market_height", 0) or 0),
+        "dragon_stock": daily_context.get("dragon_stock", ""),
+        "core_middle_stock": core_middle_stock,
+        "market_ladder": daily_context.get("market_ladder", ""),
+        "total_volume": daily_context.get("total_volume", ""),
+        "sentiment_cycle_main": sentiment_cycle_main,
+        "main_sectors": main_sectors,
+        "sub_sectors": sub_sectors,
+        "market_style": market_style,
+        "broken_high_stock": broken_high_stock,
+        "conclusion_quadrant": conclusion_quadrant,
+        "next_day_prediction": next_day_prediction,
+        "next_day_mode": next_day_mode,
+        "market_sentiment": sentiment_cycle_main,
+        "total_limit_up": total_limit_up,
+        "first_board_count": first_board_count,
+        "broken_board_count": broken_board_count,
+        "main_sector": main_sectors,
+        "sub_sector": sub_sectors,
         "broken_boards": json.dumps(broken_boards[:10], ensure_ascii=False) if broken_boards else "",
-        "review_summary": summary,
+        "review_summary": review_summary,
         "next_day_plan": next_day_plan,
-        "applicable_strategy": _recommend_strategy(cycle_result.get("phase", "震荡")),
-        "suggested_position": _suggest_position(cycle_result.get("phase", "震荡")),
+        "applicable_strategy": _strategy_by_quadrant(conclusion_quadrant),
+        "suggested_position": _position_by_quadrant(conclusion_quadrant),
         "cycle_result": cycle_result,
     }
 
 
-def _extract_main_sectors(data: dict) -> list[str]:
-    """从涨停梯队数据提取主线板块。"""
-    sector_count: dict[str, int] = {}
-    for item in data.get("ladder", []):
-        for stock in item.get("stocks", []):
-            sector = stock.get("sector", "")
-            if sector:
-                sector_count[sector] = sector_count.get(sector, 0) + 1
-
-    sorted_sectors = sorted(sector_count.items(), key=lambda x: x[1], reverse=True)
-    return [s[0] for s in sorted_sectors[:5]]
-
-
-def _extract_sub_sectors(data: dict) -> list[str]:
-    """从涨停梯队数据提取支线板块(出现 1 次的)。"""
-    sector_count: dict[str, int] = {}
-    for item in data.get("ladder", []):
-        for stock in item.get("stocks", []):
-            sector = stock.get("sector", "")
-            if sector:
-                sector_count[sector] = sector_count.get(sector, 0) + 1
-
-    sorted_sectors = sorted(sector_count.items(), key=lambda x: x[1], reverse=True)
-    main_set = set(s[0] for s in sorted_sectors[:5])
-    return [s[0] for s in sorted_sectors if s[0] not in main_set][:5]
-
-
-def _recommend_strategy(phase: str) -> str:
-    """根据情绪周期推荐交易策略。"""
-    mapping = {
-        "冰点": "低吸 — 重点低位首板、强势股的二次低吸机会",
-        "启动": "半路 — 关注卡位股和首板确认的辨识度标的",
-        "发酵": "追涨 — 跟随主线龙头，回避杂毛",
-        "高潮": "接力高标 — 仅做最高标的接力，严控仓位",
-        "高位混沌": "轻仓观望 — 等待方向明确",
-        "分歧": "低吸龙头 — 龙头分歧转一致才加仓",
-        "退潮": "空仓休息 — 等待冰点信号",
+async def _generate_structured_review(daily_context: dict, cycle_result: dict, prev_phases: list[str]) -> dict:
+    prompt_context = {
+        **daily_context,
+        "cycle_hint": cycle_result,
+        "prev_phases": prev_phases,
     }
-    return mapping.get(phase, "观望 — 等待信号明确")
-
-
-def _suggest_position(phase: str) -> str:
-    """根据情绪周期建议仓位。"""
-    mapping = {
-        "冰点": "1-2成试探仓",
-        "启动": "3成",
-        "发酵": "5-7成",
-        "高潮": "5成（随时准备减仓）",
-        "高位混沌": "3成以下",
-        "分歧": "2-3成",
-        "退潮": "空仓",
-    }
-    return mapping.get(phase, "3成")
-
-
-async def _generate_review_summary(
-    cycle: dict,
-    limit_up_data: dict,
-    market_overview: dict,
-    main_sectors: list[str],
-    broken_boards: list,
-) -> tuple[str, str]:
-    """LLM 生成复盘总结和次日计划。"""
-    from app.llm.prompts.review import REVIEW_SYSTEM_PROMPT, build_review_prompt
-
-    leader = limit_up_data.get("market_leader")
-    leader_info = ""
-    if leader:
-        leader_info = f"{leader.get('name', '')}({leader.get('board_count', 0)}板)"
-
-    prompt = build_review_prompt(
-        cycle_phase=cycle.get("phase", "未知"),
-        confidence=cycle.get("confidence", 0),
-        market_height=cycle.get("height", 0),
-        total_limit_up=cycle.get("total_limit_up", 0),
-        first_board_count=cycle.get("first_board_count", 0),
-        broken_count=cycle.get("broken_count", 0),
-        main_sectors=", ".join(main_sectors[:3]) if main_sectors else "",
-        sub_sectors="",
-        leader_info=leader_info,
-        prev_phases="",
-        matched_strategies=_recommend_strategy(cycle.get("phase", "震荡")),
-        market_overview_summary="",
-    )
-
+    prompt = build_review_prompt(prompt_context)
     settings = get_settings()
     raw = await chat(
         model=settings.utility_llm_model or "zhipu/glm-4-flash",
         prompt=prompt,
         system=REVIEW_SYSTEM_PROMPT,
-        temperature=0.3,
+        temperature=0.2,
         timeout=60,
     )
-    if raw:
+    if not raw:
+        return {}
+    try:
         import re
-        match = re.search(r"\{[\s\S]*?\}", raw)
-        if match:
-            data = json.loads(match.group())
-            return data.get("summary", ""), data.get("plan", "")
-    return "", ""
+        matched = re.search(r"\{[\s\S]*\}", raw)
+        if not matched:
+            return {}
+        data = json.loads(matched.group())
+        if isinstance(data, dict):
+            return data
+    except Exception as e:
+        logger.warning("Parse review json failed: %s", e)
+    return {}
+
+
+def _normalize_sentiment(raw_sentiment: str, cycle_phase: str) -> str:
+    if raw_sentiment in SENTIMENT_ENUM:
+        return raw_sentiment
+    phase_map = {
+        "冰点": "低位混沌期",
+        "启动": "启动期",
+        "发酵": "发酵期",
+        "高潮": "高潮期",
+        "高位混沌": "高位混沌期",
+        "分歧": "高位混沌期",
+        "退潮": "退潮期",
+    }
+    return phase_map.get(cycle_phase, "低位混沌期")
+
+
+def _normalize_quadrant(raw_quadrant: str, sentiment_cycle_main: str) -> str:
+    if raw_quadrant in QUADRANT_ENUM:
+        return raw_quadrant
+    if sentiment_cycle_main in {"启动期", "发酵期", "高潮期"}:
+        return "情指共振"
+    if sentiment_cycle_main == "高位混沌期":
+        return "情好指差"
+    if sentiment_cycle_main == "退潮期":
+        return "情指双杀"
+    return "情差指好"
+
+
+def _strategy_by_quadrant(conclusion_quadrant: str) -> str:
+    mapping = {
+        "情指共振": "擒龙主升",
+        "情差指好": "切换试错",
+        "情好指差": "补涨缠龙",
+        "情指双杀": "空仓等待",
+    }
+    return mapping.get(conclusion_quadrant, "试错轻仓")
+
+
+def _position_by_quadrant(conclusion_quadrant: str) -> str:
+    mapping = {
+        "情指共振": "5-7成",
+        "情差指好": "2-3成",
+        "情好指差": "3-4成",
+        "情指双杀": "0-1成",
+    }
+    return mapping.get(conclusion_quadrant, "2成")

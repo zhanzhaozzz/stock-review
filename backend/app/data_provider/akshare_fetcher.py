@@ -129,3 +129,71 @@ class AKShareFetcher(BaseFetcher):
         except Exception as e:
             logger.warning("AKShare get_index_daily failed for %s: %s", code, e)
             return None
+
+    async def get_market_turnover(self, trade_date: str = "today") -> dict | None:
+        """获取沪深成交额及与上一交易日的增缩量。"""
+        try:
+            import akshare as ak
+
+            target = datetime.now().date()
+            if trade_date and trade_date != "today":
+                try:
+                    target = datetime.fromisoformat(trade_date).date()
+                except ValueError:
+                    target = datetime.now().date()
+
+            start_date = (target - timedelta(days=15)).strftime("%Y%m%d")
+            end_date = target.strftime("%Y%m%d")
+            sh_df = ak.index_zh_a_hist(symbol="000001", period="daily", start_date=start_date, end_date=end_date)
+            sz_df = ak.index_zh_a_hist(symbol="399001", period="daily", start_date=start_date, end_date=end_date)
+            if sh_df is None or sh_df.empty or sz_df is None or sz_df.empty:
+                return None
+
+            sh_amounts = sh_df["成交额"].dropna().tolist()
+            sz_amounts = sz_df["成交额"].dropna().tolist()
+            if len(sh_amounts) < 2 or len(sz_amounts) < 2:
+                return None
+
+            today_yi = _to_yi(sh_amounts[-1]) + _to_yi(sz_amounts[-1])
+            prev_yi = _to_yi(sh_amounts[-2]) + _to_yi(sz_amounts[-2])
+            delta_yi = today_yi - prev_yi
+            sign = "+" if delta_yi >= 0 else ""
+            self.record_success()
+            return {
+                "total_volume": f"{today_yi:.0f}亿 {sign}{delta_yi:.0f}亿",
+                "total_amount_yi": round(today_yi, 2),
+                "delta_amount_yi": round(delta_yi, 2),
+            }
+        except Exception as e:
+            logger.warning("AKShare get_market_turnover failed: %s", e)
+            self.record_failure()
+            return None
+
+    async def get_limit_up_pool(self, trade_date: str = "today") -> pd.DataFrame | None:
+        """获取指定日期涨停池。"""
+        try:
+            import akshare as ak
+
+            target = datetime.now().date()
+            if trade_date and trade_date != "today":
+                try:
+                    target = datetime.fromisoformat(trade_date).date()
+                except ValueError:
+                    target = datetime.now().date()
+            df = ak.stock_zt_pool_em(date=target.strftime("%Y%m%d"))
+            if df is None or df.empty:
+                self.record_failure()
+                return None
+            self.record_success()
+            return df
+        except Exception as e:
+            logger.warning("AKShare get_limit_up_pool failed: %s", e)
+            self.record_failure()
+            return None
+
+
+def _to_yi(amount: float) -> float:
+    amount = float(amount or 0)
+    if abs(amount) >= 1_000_000:
+        return amount / 100_000_000
+    return amount

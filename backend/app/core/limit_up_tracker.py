@@ -1,7 +1,7 @@
 """涨停板/连板梯队追踪 — 替代 Excel 截图。"""
 import logging
 from collections import defaultdict
-from datetime import date
+from datetime import date, datetime, timedelta
 
 logger = logging.getLogger(__name__)
 
@@ -22,18 +22,22 @@ async def get_limit_up_data(target_date: str = "today") -> dict:
     """
     import akshare as ak
 
+    trade_day = _parse_trade_day(target_date)
     result = {
-        "date": str(date.today()),
+        "date": str(trade_day),
         "market_height": 0,
         "market_leader": None,
         "ladder": [],
         "first_board_count": 0,
         "broken_boards": [],
         "sector_distribution": {},
+        "limit_down_count": 0,
+        "promotion_rate": 0.0,
+        "promotion_rate_text": "",
     }
 
     try:
-        zt_df = ak.stock_zt_pool_em(date=date.today().strftime("%Y%m%d"))
+        zt_df = ak.stock_zt_pool_em(date=trade_day.strftime("%Y%m%d"))
     except Exception as e:
         logger.warning("stock_zt_pool_em failed: %s", e)
         zt_df = None
@@ -103,9 +107,11 @@ async def get_limit_up_data(target_date: str = "today") -> dict:
 
     result["ladder"] = ladder
     result["sector_distribution"] = dict(sorted(sector_counter.items(), key=lambda x: x[1], reverse=True)[:15])
+    result["limit_down_count"] = _get_limit_down_count(ak, trade_day, zt_df)
+    result["promotion_rate"], result["promotion_rate_text"] = _get_promotion_rate(ak, trade_day, zt_df)
 
     try:
-        broken_df = ak.stock_zt_pool_zbgc_em(date=date.today().strftime("%Y%m%d"))
+        broken_df = ak.stock_zt_pool_zbgc_em(date=trade_day.strftime("%Y%m%d"))
         if broken_df is not None and not broken_df.empty:
             for _, row in broken_df.iterrows():
                 result["broken_boards"].append({
@@ -117,3 +123,87 @@ async def get_limit_up_data(target_date: str = "today") -> dict:
         logger.debug("stock_zt_pool_zbgc_em failed: %s", e)
 
     return result
+
+
+def _parse_trade_day(target_date: str) -> date:
+    if target_date and target_date != "today":
+        try:
+            dt = datetime.fromisoformat(target_date).date()
+        except ValueError:
+            dt = date.today()
+    else:
+        dt = date.today()
+    while dt.weekday() >= 5:
+        dt -= timedelta(days=1)
+    return dt
+
+
+def _get_limit_down_count(ak, trade_day: date, zt_df) -> int:
+    try:
+        dt_df = ak.stock_zt_pool_dtgc_em(date=trade_day.strftime("%Y%m%d"))
+        if dt_df is not None and not dt_df.empty:
+            return len(dt_df)
+    except Exception as e:
+        logger.debug("stock_zt_pool_dtgc_em failed: %s", e)
+
+    # 兜底用全市场快照统计，避免从涨停池推断导致失真。
+    try:
+        spot_df = ak.stock_zh_a_spot_em()
+        if spot_df is not None and not spot_df.empty and "涨跌幅" in spot_df.columns:
+            return int((spot_df["涨跌幅"] <= -9.9).sum())
+    except Exception as e:
+        logger.debug("stock_zh_a_spot_em fallback failed: %s", e)
+
+    if zt_df is None or zt_df.empty:
+        return 0
+    return 0
+
+
+def _get_promotion_rate(ak, trade_day: date, today_zt_df) -> tuple[float, str]:
+    yesterday = trade_day - timedelta(days=1)
+    while yesterday.weekday() >= 5:
+        yesterday -= timedelta(days=1)
+
+    try:
+        y_df = ak.stock_zt_pool_em(date=yesterday.strftime("%Y%m%d"))
+    except Exception as e:
+        logger.debug("stock_zt_pool_em yesterday failed: %s", e)
+        return 0.0, ""
+
+    if y_df is None or y_df.empty or today_zt_df is None or today_zt_df.empty:
+        return 0.0, ""
+
+    y_col_map = {"代码": "code", "连板数": "board_count"}
+    t_col_map = {"代码": "code", "连板数": "board_count"}
+    y_df = y_df.rename(columns={k: v for k, v in y_col_map.items() if k in y_df.columns})
+    t_df = today_zt_df.rename(columns={k: v for k, v in t_col_map.items() if k in today_zt_df.columns})
+
+    if "code" not in y_df.columns or "code" not in t_df.columns:
+        return 0.0, ""
+
+    if "board_count" not in y_df.columns:
+        y_df["board_count"] = 1
+    if "board_count" not in t_df.columns:
+        t_df["board_count"] = 1
+
+    y_df["board_count"] = y_df["board_count"].fillna(1).astype(int)
+    t_df["board_count"] = t_df["board_count"].fillna(1).astype(int)
+    y_df["code"] = y_df["code"].astype(str)
+    t_df["code"] = t_df["code"].astype(str)
+
+    yesterday_lianban = y_df[y_df["board_count"] >= 2]
+    if yesterday_lianban.empty:
+        return 0.0, ""
+
+    today_map = {row["code"]: int(row["board_count"]) for _, row in t_df.iterrows()}
+    total = len(yesterday_lianban)
+    success = 0
+    for _, row in yesterday_lianban.iterrows():
+        code = row["code"]
+        y_bc = int(row["board_count"])
+        t_bc = today_map.get(code, 0)
+        if t_bc > y_bc:
+            success += 1
+
+    rate = round((success / total) * 100, 2) if total > 0 else 0.0
+    return rate, f"{rate:.2f}% ({success}/{total})"
