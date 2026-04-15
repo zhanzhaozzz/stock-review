@@ -116,6 +116,13 @@ async def _migrate_daily_reviews(conn):
     if "next_day_mode" not in cols:
         alter_statements.append("ALTER TABLE daily_reviews ADD COLUMN next_day_mode TEXT")
 
+    if "sentiment_cycle_sub" not in cols:
+        alter_statements.append("ALTER TABLE daily_reviews ADD COLUMN sentiment_cycle_sub VARCHAR(50)")
+    if "index_sentiment_sh" not in cols:
+        alter_statements.append("ALTER TABLE daily_reviews ADD COLUMN index_sentiment_sh VARCHAR(100)")
+    if "index_sentiment_csm" not in cols:
+        alter_statements.append("ALTER TABLE daily_reviews ADD COLUMN index_sentiment_csm VARCHAR(100)")
+
     if not alter_statements:
         return
 
@@ -127,7 +134,7 @@ async def _migrate_daily_reviews(conn):
 
 async def init_db():
     """Create all tables."""
-    from app.models import stock, rating, analysis, watchlist, news, review, strategy, sentiment, user, llm_usage, market, fundamental  # noqa: F401
+    from app.models import stock, rating, analysis, watchlist, news, review, strategy, sentiment, user, llm_usage, market, fundamental, quote  # noqa: F401
 
     async with engine.begin() as conn:
         await _migrate_operation_records(conn)

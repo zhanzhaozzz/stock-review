@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 
@@ -18,9 +19,35 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+_preload_task = None
+
+
+async def _startup_preload():
+    """服务启动后自动预加载市场数据（非阻塞，不影响服务可用性）。"""
+    await asyncio.sleep(3)
+    try:
+        from app.api.v1.sync import _sync_market
+        result = await _sync_market()
+        logger.info("Startup market preload done: %s", result)
+    except Exception as e:
+        logger.warning("Startup market preload failed: %s", e)
+    try:
+        from app.api.v1.sync import _preload_watchlist_klines
+        result = await _preload_watchlist_klines()
+        logger.info("Startup watchlist klines preload done: %s", result)
+    except Exception as e:
+        logger.warning("Startup watchlist klines preload failed: %s", e)
+    try:
+        from app.api.v1.sync import _sync_fundamentals
+        result = await _sync_fundamentals()
+        logger.info("Startup fundamentals preload done: %s", result)
+    except Exception as e:
+        logger.warning("Startup fundamentals preload failed: %s", e)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    global _preload_task
     logger.info("Starting Stock Review...")
     await init_db()
     async with async_session() as session:
@@ -36,6 +63,7 @@ async def lifespan(app: FastAPI):
         logger.info("Scheduler started")
     except Exception as e:
         logger.warning("Scheduler failed to start: %s", e)
+    _preload_task = asyncio.create_task(_startup_preload())
     yield
     try:
         scheduler = get_scheduler()

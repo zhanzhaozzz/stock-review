@@ -54,6 +54,26 @@ async def _read_snapshot(db: AsyncSession, snapshot_type: str) -> dict | list | 
     return None
 
 
+async def _read_snapshot_by_date(
+    db: AsyncSession, snapshot_type: str, target_date: date,
+) -> dict | list | None:
+    """按指定日期从 SQLite 读取快照。"""
+    stmt = (
+        select(MarketSnapshot)
+        .where(
+            MarketSnapshot.snapshot_type == snapshot_type,
+            MarketSnapshot.date == target_date,
+        )
+        .order_by(desc(MarketSnapshot.updated_at))
+        .limit(1)
+    )
+    result = await db.execute(stmt)
+    row = result.scalar_one_or_none()
+    if row:
+        return row.data
+    return None
+
+
 @router.get("/overview")
 async def market_overview(db: AsyncSession = Depends(get_db)):
     """大盘指数 + 涨跌面 + 涨停跌停数。
@@ -142,6 +162,16 @@ async def limit_up_board(
     db: AsyncSession = Depends(get_db),
 ):
     """涨停板/连板梯队结构化数据。"""
+    if date_str and date_str != "today":
+        try:
+            target_date = date.fromisoformat(date_str)
+        except ValueError:
+            return {}
+        data = await _read_snapshot_by_date(db, "limit_up", target_date)
+        if data:
+            return data
+        return {}
+
     cached = await cache_get("sr:market:limit_up")
     if cached:
         return cached

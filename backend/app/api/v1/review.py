@@ -13,11 +13,13 @@ from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select, desc
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.core.review_engine import generate_daily_review
 from app.core.limit_up_tracker import get_limit_up_data
+from app.core.strategy_matcher import get_recommend_for_review
 from app.models.review import DailyReview, LimitUpBoard
 from app.models.sentiment import SentimentCycleLog
 from app.schemas.review import (
@@ -31,30 +33,51 @@ router = APIRouter()
 
 
 @router.post("/run")
-async def run_review(db: AsyncSession = Depends(get_db)):
-    """触发当日复盘。"""
-    today = date.today()
+async def run_review(
+    target_date: str = Query(None, description="目标日期 YYYY-MM-DD，为空则取今日"),
+    db: AsyncSession = Depends(get_db),
+):
+    """触发复盘（支持补充历史复盘）。若已存在则覆盖更新。"""
+    if target_date:
+        try:
+            today = date.fromisoformat(target_date)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="日期格式错误，应为 YYYY-MM-DD")
+    else:
+        today = date.today()
 
-    existing = await db.execute(
+    date_str = str(today) if today != date.today() else "today"
+
+    existing_result = await db.execute(
         select(DailyReview).where(DailyReview.date == today)
     )
-    if existing.scalar_one_or_none():
-        raise HTTPException(status_code=409, detail="今日复盘已存在，请通过编辑更新")
+    existing_review = existing_result.scalar_one_or_none()
 
     try:
-        limit_up_data = await get_limit_up_data()
+        limit_up_data = await get_limit_up_data(date_str)
     except Exception as e:
         logger.error("Failed to get limit-up data: %s", e)
         limit_up_data = {"market_height": 0, "ladder": [], "broken_boards": []}
 
     market_overview = None
-    try:
-        from app.cache import cache_get
-        cached = await cache_get("sr:market:overview")
-        if cached and isinstance(cached, dict):
-            market_overview = cached
-    except Exception:
-        pass
+    if today == date.today():
+        try:
+            from app.cache import cache_get
+            cached = await cache_get("sr:market:overview")
+            if cached and isinstance(cached, dict):
+                market_overview = cached
+        except Exception:
+            pass
+
+    if not market_overview:
+        try:
+            from app.api.v1.market import _read_snapshot, _read_snapshot_by_date
+            if today != date.today():
+                market_overview = await _read_snapshot_by_date(db, "overview", today)
+            if not market_overview:
+                market_overview = await _read_snapshot(db, "overview")
+        except Exception:
+            pass
 
     prev_phases = await _get_prev_phases(db)
 
@@ -68,27 +91,58 @@ async def run_review(db: AsyncSession = Depends(get_db)):
     cycle = result.get("cycle_result", {})
     ai_reason = cycle.get("ai_reason", "") if isinstance(cycle, dict) else ""
 
-    review_obj = DailyReview(
-        date=today,
+    cycle_phase = cycle.get("phase", "") if isinstance(cycle, dict) else ""
+    try:
+        strategy_text, position_text = await get_recommend_for_review(cycle_phase, db)
+        result["applicable_strategy"] = strategy_text
+        result["suggested_position"] = position_text
+    except Exception as e:
+        logger.warning("strategy_matcher failed, using engine defaults: %s", e)
+
+    raw_height = result.get("market_height", 0) or limit_up_data.get("market_height", 0)
+    raw_ladder = limit_up_data.get("ladder", [])
+    raw_total_limit_up = result.get("total_limit_up", 0) or sum(
+        len(lv.get("stocks", [])) for lv in raw_ladder
+    )
+    raw_first_board = result.get("first_board_count", 0) or int(limit_up_data.get("first_board_count", 0) or 0)
+    raw_broken = limit_up_data.get("broken_boards", [])
+    raw_broken_count = result.get("broken_board_count", 0) or len(raw_broken)
+    raw_broken_names = result.get("broken_boards", "")
+    if not raw_broken_names and raw_broken:
+        raw_broken_names = ",".join(
+            b.get("name", "") for b in raw_broken[:10] if isinstance(b, dict)
+        )
+
+    auto_volume = result.get("total_volume", "")
+    if not auto_volume and market_overview:
+        breadth = market_overview.get("breadth", {})
+        total_amount = breadth.get("total_amount")
+        if isinstance(total_amount, (int, float)) and total_amount > 0:
+            auto_volume = f"约{round(total_amount / 1e8)}亿"
+
+    review_fields = dict(
         status=result.get("status", "draft"),
         market_sentiment=result.get("market_sentiment", ""),
         sentiment_cycle_main=result.get("sentiment_cycle_main", ""),
-        market_height=result.get("market_height", 0),
+        market_height=raw_height,
         market_leader=leader_name,
         dragon_stock=result.get("dragon_stock", leader_name),
         core_middle_stock=result.get("core_middle_stock", ""),
         market_ladder=result.get("market_ladder", ""),
-        total_volume=result.get("total_volume", ""),
-        total_limit_up=result.get("total_limit_up", 0),
-        first_board_count=result.get("first_board_count", 0),
-        broken_board_count=result.get("broken_board_count", 0),
+        total_volume=auto_volume,
+        total_limit_up=raw_total_limit_up,
+        first_board_count=raw_first_board,
+        broken_board_count=raw_broken_count,
+        sentiment_cycle_sub=result.get("sentiment_cycle_sub", ""),
+        index_sentiment_sh=result.get("index_sentiment_sh", ""),
+        index_sentiment_csm=result.get("index_sentiment_csm", ""),
         sentiment_detail=ai_reason,
         main_sector=result.get("main_sector", ""),
         sub_sector=result.get("sub_sector", ""),
         main_sectors=result.get("main_sectors", ""),
         sub_sectors=result.get("sub_sectors", ""),
         market_style=result.get("market_style", ""),
-        broken_boards=result.get("broken_boards", ""),
+        broken_boards=raw_broken_names or result.get("broken_boards", ""),
         broken_high_stock=result.get("broken_high_stock", ""),
         conclusion_quadrant=result.get("conclusion_quadrant", ""),
         review_summary=result.get("review_summary", ""),
@@ -101,7 +155,15 @@ async def run_review(db: AsyncSession = Depends(get_db)):
         ai_next_day_suggestion=result.get("next_day_plan", ""),
         is_confirmed=(result.get("status", "draft") == "published"),
     )
-    db.add(review_obj)
+
+    if existing_review:
+        for field, value in review_fields.items():
+            setattr(existing_review, field, value)
+        msg = "复盘已重新生成（覆盖旧草稿）"
+    else:
+        review_obj = DailyReview(date=today, **review_fields)
+        db.add(review_obj)
+        msg = "复盘已生成"
 
     sentiment_log = SentimentCycleLog(
         date=today,
@@ -114,15 +176,31 @@ async def run_review(db: AsyncSession = Depends(get_db)):
 
     await _save_limit_up_boards(db, today, limit_up_data)
 
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        logger.warning("IntegrityError on review commit, retrying as update")
+        async with db.begin():
+            re_result = await db.execute(
+                select(DailyReview).where(DailyReview.date == today)
+            )
+            row = re_result.scalar_one_or_none()
+            if row:
+                for field, value in review_fields.items():
+                    setattr(row, field, value)
+        msg = "复盘已重新生成（覆盖旧草稿）"
 
-    return {"message": "复盘已生成", "date": str(today), "sentiment": cycle.get("phase", "")}
+    return {"message": msg, "date": str(today), "sentiment": cycle.get("phase", "")}
 
 
 @router.post("/generate")
-async def generate_review(db: AsyncSession = Depends(get_db)):
+async def generate_review(
+    target_date: str = Query(None, description="目标日期 YYYY-MM-DD，为空则取今日"),
+    db: AsyncSession = Depends(get_db),
+):
     """兼容计划文档：/generate 等价于 /run。"""
-    return await run_review(db)
+    return await run_review(target_date=target_date, db=db)
 
 
 @router.get("/today", response_model=DailyReviewItem)
@@ -297,7 +375,11 @@ def _to_review_item(r: DailyReview) -> DailyReviewItem:
         main_sectors=r.main_sectors or r.main_sector or "",
         sub_sectors=r.sub_sectors or r.sub_sector or "",
         market_style=r.market_style or "",
+        broken_boards=r.broken_boards or "",
         broken_high_stock=r.broken_high_stock or "",
+        sentiment_cycle_sub=r.sentiment_cycle_sub or "",
+        index_sentiment_sh=r.index_sentiment_sh or "",
+        index_sentiment_csm=r.index_sentiment_csm or "",
         conclusion_quadrant=r.conclusion_quadrant or "",
         review_summary=r.review_summary or "",
         next_day_plan=r.next_day_plan or "",

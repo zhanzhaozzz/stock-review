@@ -4,6 +4,7 @@ import logging
 from datetime import date
 
 from app.config import get_settings
+from app.core.enums import CYCLE_DISPLAY_MAP, QUADRANTS
 from app.core.market_review import get_daily_context
 from app.core.sentiment_engine import judge_cycle_with_ai
 from app.llm.client import chat
@@ -11,8 +12,8 @@ from app.llm.prompts.review import REVIEW_SYSTEM_PROMPT, build_review_prompt
 
 logger = logging.getLogger(__name__)
 
-SENTIMENT_ENUM = {"启动期", "发酵期", "高潮期", "高位混沌期", "退潮期", "低位混沌期"}
-QUADRANT_ENUM = {"情指共振", "情好指差", "情差指好", "情指双杀"}
+SENTIMENT_ENUM = set(CYCLE_DISPLAY_MAP.values())
+QUADRANT_ENUM = set(QUADRANTS)
 
 
 async def generate_daily_review(
@@ -55,11 +56,15 @@ async def generate_daily_review(
     first_board_count = int(limit_context.get("first_board_count", 0) or 0) if isinstance(limit_context, dict) else 0
     broken_board_count = len(broken_boards)
 
-    review_summary = f"{sentiment_cycle_main}，{conclusion_quadrant}。{market_style}".strip("，。")
-    next_day_plan = "\n".join(x for x in [next_day_prediction, next_day_mode] if x).strip()
+    review_summary = llm_output.get("review_summary", "")
+    if not review_summary:
+        review_summary = f"{sentiment_cycle_main}，{conclusion_quadrant}。{market_style}".strip("，。")
+    next_day_plan = llm_output.get("next_day_plan", "")
+    if not next_day_plan:
+        next_day_plan = "\n".join(x for x in [next_day_prediction, next_day_mode] if x).strip()
 
     return {
-        "date": str(date.today()),
+        "date": str(daily_context.get("date", date.today())),
         "status": "draft",
         "market_height": int(daily_context.get("market_height", 0) or 0),
         "dragon_stock": daily_context.get("dragon_stock", ""),
@@ -83,6 +88,9 @@ async def generate_daily_review(
         "broken_boards": json.dumps(broken_boards[:10], ensure_ascii=False) if broken_boards else "",
         "review_summary": review_summary,
         "next_day_plan": next_day_plan,
+        "sentiment_cycle_sub": llm_output.get("sentiment_cycle_sub", ""),
+        "index_sentiment_sh": llm_output.get("index_sentiment_sh", ""),
+        "index_sentiment_csm": llm_output.get("index_sentiment_csm", ""),
         "applicable_strategy": _strategy_by_quadrant(conclusion_quadrant),
         "suggested_position": _position_by_quadrant(conclusion_quadrant),
         "cycle_result": cycle_result,
@@ -122,16 +130,7 @@ async def _generate_structured_review(daily_context: dict, cycle_result: dict, p
 def _normalize_sentiment(raw_sentiment: str, cycle_phase: str) -> str:
     if raw_sentiment in SENTIMENT_ENUM:
         return raw_sentiment
-    phase_map = {
-        "冰点": "低位混沌期",
-        "启动": "启动期",
-        "发酵": "发酵期",
-        "高潮": "高潮期",
-        "高位混沌": "高位混沌期",
-        "分歧": "高位混沌期",
-        "退潮": "退潮期",
-    }
-    return phase_map.get(cycle_phase, "低位混沌期")
+    return CYCLE_DISPLAY_MAP.get(cycle_phase, "低位混沌期")
 
 
 def _normalize_quadrant(raw_quadrant: str, sentiment_cycle_main: str) -> str:

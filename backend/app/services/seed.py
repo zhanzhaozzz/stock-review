@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 INITIAL_STRATEGIES = [
     {
         "name": "擒龙战法",
-        "applicable_cycles": ["上升期", "发酵", "高潮"],
+        "applicable_cycles": ["发酵", "高潮"],
         "conditions": "主线上升期，龙头地位明确",
         "entry_rules": (
             "1. 龙头首分后弱转强（竞价、打板）\n"
@@ -33,7 +33,7 @@ INITIAL_STRATEGIES = [
     },
     {
         "name": "补涨套利",
-        "applicable_cycles": ["上升期", "发酵", "高潮", "高位混沌"],
+        "applicable_cycles": ["高位混沌", "分歧"],
         "conditions": "主线上升期、主线高位混沌期",
         "entry_rules": (
             "1. 盘龙分歧转修复主线内的前排首板（打板，要求距调整线+3%内三天内启动）\n"
@@ -48,7 +48,7 @@ INITIAL_STRATEGIES = [
         "sort_order": 2,
     },
     {
-        "name": "回流低吸",
+        "name": "缠龙低吸",
         "applicable_cycles": ["高位混沌"],
         "conditions": "高位混沌期，主线分歧转修复日",
         "entry_rules": "主线分歧转修复日低吸至少是突破近期平台的首板 30F/60F回调笔",
@@ -59,7 +59,7 @@ INITIAL_STRATEGIES = [
     },
     {
         "name": "试错轻仓",
-        "applicable_cycles": ["冰点", "低位混沌"],
+        "applicable_cycles": ["冰点", "启动"],
         "conditions": "冰点期、低位混沌期，切换至潜在主线",
         "entry_rules": (
             "1. 首板 指数、情绪冰点共振反转（打板，要求距调整线+3%内三天内启动）\n"

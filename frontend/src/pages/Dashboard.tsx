@@ -1,6 +1,8 @@
-import { useEffect, useState, useCallback } from "react";
+import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import api from "../api/client";
 import { getPctColor, formatPct } from "../utils/stockColor";
+import { useMarketOverview, useMarketSectors } from "../hooks/useMarketData";
 import StockDrawer from "../components/StockDrawer";
 
 interface IndexQuote {
@@ -38,51 +40,35 @@ interface ConstituentStock {
 }
 
 export default function Dashboard() {
-  const [indices, setIndices] = useState<IndexQuote[]>([]);
-  const [breadth, setBreadth] = useState<Breadth | null>(null);
-  const [sectors, setSectors] = useState<SectorItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [syncing, setSyncing] = useState(false);
+  const qc = useQueryClient();
+  const { data: overviewData, isLoading: loadingOverview } = useMarketOverview();
+  const { data: sectorsData, isLoading: loadingSectors } = useMarketSectors("concept", 20);
 
+  const indices: IndexQuote[] = overviewData?.indices || [];
+  const breadth: Breadth | null = overviewData?.breadth || null;
+  const sectors: SectorItem[] = sectorsData || [];
+  const loading = loadingOverview || loadingSectors;
+
+  const [syncing, setSyncing] = useState(false);
   const [expandedSector, setExpandedSector] = useState<string | null>(null);
   const [constituents, setConstituents] = useState<ConstituentStock[]>([]);
   const [loadingCons, setLoadingCons] = useState(false);
   const [selectedStock, setSelectedStock] = useState<{ code: string; name: string } | null>(null);
 
-  const loadData = useCallback(async () => {
-    setLoading(true);
-    try {
-      const [overviewRes, sectorsRes] = await Promise.allSettled([
-        api.get("/market/overview"),
-        api.get("/market/sectors?sector_type=concept&limit=20"),
-      ]);
-      if (overviewRes.status === "fulfilled") {
-        const data = overviewRes.value.data;
-        setIndices(data.indices || []);
-        setBreadth(data.breadth || null);
-      }
-      if (sectorsRes.status === "fulfilled") {
-        setSectors(sectorsRes.value.data || []);
-      }
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
-
   async function handleSync() {
     setSyncing(true);
     try {
       await api.post("/sync/market");
-      await loadData();
+      qc.invalidateQueries({ queryKey: ["market"] });
     } catch {
       /* sync failed */
     } finally {
       setSyncing(false);
     }
+  }
+
+  function handleRefresh() {
+    qc.invalidateQueries({ queryKey: ["market"] });
   }
 
   async function toggleSector(name: string) {
@@ -126,7 +112,7 @@ export default function Dashboard() {
             {syncing ? "同步中..." : "同步数据"}
           </button>
           <button
-            onClick={loadData}
+            onClick={handleRefresh}
             className="px-3 py-1.5 text-sm bg-input hover:bg-card-hover rounded-lg transition"
           >
             刷新

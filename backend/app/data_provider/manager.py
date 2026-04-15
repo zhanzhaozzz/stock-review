@@ -12,6 +12,7 @@ from app.data_provider.tushare_fetcher import TushareFetcher
 from app.data_provider.efinance_fetcher import EfinanceFetcher
 from app.data_provider.realtime import get_tencent_quote, get_sina_quote
 from app.data_provider.fundamental import get_fundamental
+from app.data_provider.circuit_breaker import realtime_breaker, market_data_breaker
 
 logger = logging.getLogger(__name__)
 
@@ -73,20 +74,127 @@ class DataFetcherManager:
         return None
 
     async def get_realtime_quote(self, code: str) -> dict | None:
-        quote = await get_tencent_quote(code)
-        if quote:
-            return quote
-        quote = await get_sina_quote(code)
-        if quote:
-            return quote
+        sources = [
+            ("tencent", lambda: get_tencent_quote(code)),
+            ("sina", lambda: get_sina_quote(code)),
+        ]
+        for name, fn in sources:
+            if not realtime_breaker.allow_request(name):
+                continue
+            try:
+                quote = await fn()
+                if quote:
+                    realtime_breaker.record_success(name)
+                    return quote
+            except Exception as e:
+                realtime_breaker.record_failure(name, str(e))
+
         for fetcher in self._get_ordered_fetchers():
-            quote = await fetcher.get_realtime_quote(code)
-            if quote:
-                return quote
+            src = f"fetcher_{fetcher.name}"
+            if not realtime_breaker.allow_request(src):
+                continue
+            try:
+                quote = await fetcher.get_realtime_quote(code)
+                if quote:
+                    realtime_breaker.record_success(src)
+                    return quote
+            except Exception as e:
+                realtime_breaker.record_failure(src, str(e))
         return None
 
     async def get_fundamental(self, code: str) -> dict | None:
         return await get_fundamental(code)
+
+    async def get_limit_up_pool(self, trade_date: str = "today") -> pd.DataFrame | None:
+        """涨停池：akshare -> tushare fallback。"""
+        ak_fetcher: AKShareFetcher = self._fetchers.get("akshare")
+        ts_fetcher: TushareFetcher = self._fetchers.get("tushare")
+
+        if ak_fetcher and market_data_breaker.allow_request("akshare_limit_up"):
+            try:
+                result = await ak_fetcher.get_limit_up_pool(trade_date)
+                if result is not None and not result.empty:
+                    market_data_breaker.record_success("akshare_limit_up")
+                    return result
+            except Exception as e:
+                market_data_breaker.record_failure("akshare_limit_up", str(e))
+
+        if ts_fetcher and market_data_breaker.allow_request("tushare_limit_up"):
+            try:
+                result = await ts_fetcher.get_limit_up_pool(trade_date)
+                if result is not None and not result.empty:
+                    market_data_breaker.record_success("tushare_limit_up")
+                    return result
+            except Exception as e:
+                market_data_breaker.record_failure("tushare_limit_up", str(e))
+
+        logger.warning("get_limit_up_pool failed on all providers")
+        return None
+
+    async def get_broken_board_pool(self, trade_date: str = "today") -> pd.DataFrame | None:
+        """炸板池：akshare。"""
+        ak_fetcher: AKShareFetcher = self._fetchers.get("akshare")
+        if ak_fetcher:
+            try:
+                return await ak_fetcher.get_broken_board_pool(trade_date)
+            except Exception as e:
+                logger.debug("get_broken_board_pool failed: %s", e)
+        return None
+
+    async def get_limit_down_pool(self, trade_date: str = "today") -> pd.DataFrame | None:
+        """跌停池：akshare。"""
+        ak_fetcher: AKShareFetcher = self._fetchers.get("akshare")
+        if ak_fetcher:
+            try:
+                return await ak_fetcher.get_limit_down_pool(trade_date)
+            except Exception as e:
+                logger.debug("get_limit_down_pool failed: %s", e)
+        return None
+
+    async def get_market_turnover(self, trade_date: str = "today") -> dict | None:
+        """成交额：akshare -> tushare fallback。"""
+        ak_fetcher: AKShareFetcher = self._fetchers.get("akshare")
+        if ak_fetcher:
+            try:
+                result = await ak_fetcher.get_market_turnover(trade_date)
+                if result:
+                    return result
+            except Exception as e:
+                logger.debug("akshare get_market_turnover failed: %s", e)
+        return None
+
+    async def get_sector_ranking(self, sector_type: str = "concept", limit: int = 30) -> list[dict]:
+        """板块排行：akshare -> tushare fallback。"""
+        ak_fetcher: AKShareFetcher = self._fetchers.get("akshare")
+        ts_fetcher: TushareFetcher = self._fetchers.get("tushare")
+
+        if ak_fetcher:
+            try:
+                result = await ak_fetcher.get_sector_ranking(sector_type, limit)
+                if result:
+                    return result
+            except Exception as e:
+                logger.debug("akshare get_sector_ranking failed: %s", e)
+
+        if ts_fetcher:
+            try:
+                result = await ts_fetcher.get_sector_ranking(sector_type, limit)
+                if result:
+                    return result
+            except Exception as e:
+                logger.debug("tushare get_sector_ranking failed: %s", e)
+
+        return []
+
+    async def get_market_breadth(self) -> dict | None:
+        """涨跌面统计：akshare。"""
+        ak_fetcher: AKShareFetcher = self._fetchers.get("akshare")
+        if ak_fetcher:
+            try:
+                return await ak_fetcher.get_market_breadth()
+            except Exception as e:
+                logger.debug("get_market_breadth failed: %s", e)
+        return None
 
 
 async def _fetch_daily_tencent(code: str, days: int = 120) -> pd.DataFrame | None:

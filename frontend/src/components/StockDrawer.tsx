@@ -1,8 +1,14 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import api from "../api/client";
 import MiniKLine from "./charts/MiniKLine";
 import RadarChart from "./charts/RadarChart";
+import {
+  useStockDaily,
+  useStockQuote,
+  useStockFundamental,
+  useRatingHistory,
+  useAnalysisHistory,
+} from "../hooks/useMarketData";
 
 interface KLinePoint {
   date: string;
@@ -170,70 +176,52 @@ function getRatingBadge(rating: string): string {
 
 export default function StockDrawer({ code, name, sector, onClose }: Props) {
   const navigate = useNavigate();
-  const [kline, setKline] = useState<KLinePoint[]>([]);
-  const [rating, setRating] = useState<RatingInfo | null>(null);
-  const [analysis, setAnalysis] = useState<AnalysisBrief | null>(null);
-  const [quote, setQuote] = useState<QuoteInfo | null>(null);
-  const [fund, setFund] = useState<FundamentalInfo | null>(null);
-  const [loading, setLoading] = useState(true);
 
-  const loadData = useCallback(async () => {
-    if (!code) return;
-    setLoading(true);
-    try {
-      const [kRes, rRes, aRes, qRes, fRes] = await Promise.allSettled([
-        api.get(`/market/stock/${code}/daily?days=60`),
-        api.get(`/ratings/history/${code}?limit=1`),
-        api.get(`/analysis/history?code=${code}&limit=1`),
-        api.get(`/market/quote/${code}`),
-        api.get(`/market/fundamental/${code}`),
-      ]);
+  const { data: klineData, isLoading: loadingK } = useStockDaily(code, 60);
+  const { data: ratingData, isLoading: loadingR } = useRatingHistory(code, 1);
+  const { data: analysisData } = useAnalysisHistory(code, 1);
+  const { data: quoteData, isLoading: loadingQ } = useStockQuote(code);
+  const { data: fundData } = useStockFundamental(code);
 
-      if (kRes.status === "fulfilled") {
-        setKline((kRes.value.data?.data || []) as KLinePoint[]);
+  const loading = loadingK || loadingR || loadingQ;
+
+  const kline: KLinePoint[] = klineData?.data || [];
+  const rating: RatingInfo | null = ratingData?.length > 0 ? ratingData[0] : null;
+
+  const analysis: AnalysisBrief | null = useMemo(() => {
+    if (!analysisData?.length) return null;
+    const item = analysisData[0];
+    let summary = "";
+    let signal = "";
+    let score = 0;
+    if (item.raw_result) {
+      try {
+        const parsed = JSON.parse(item.raw_result);
+        summary = parsed.summary || "";
+        signal = parsed.signal || item.advice || "";
+        score = parsed.score || item.score || 0;
+      } catch {
+        summary = "";
+        signal = item.advice || "";
+        score = item.score || 0;
       }
-      if (rRes.status === "fulfilled" && rRes.value.data?.length > 0) {
-        setRating(rRes.value.data[0]);
-      }
-      if (aRes.status === "fulfilled" && aRes.value.data?.length > 0) {
-        const item = aRes.value.data[0];
-        let summary = "";
-        let signal = "";
-        let score = 0;
-        if (item.raw_result) {
-          try {
-            const parsed = JSON.parse(item.raw_result);
-            summary = parsed.summary || "";
-            signal = parsed.signal || item.advice || "";
-            score = parsed.score || item.score || 0;
-          } catch {
-            summary = "";
-            signal = item.advice || "";
-            score = item.score || 0;
-          }
-        } else {
-          signal = item.advice || "";
-          score = item.score || 0;
-        }
-        setAnalysis({ id: item.id, summary, signal, score, date: item.date });
-      }
-      if (qRes.status === "fulfilled" && qRes.value.data && !qRes.value.data.error) {
-        setQuote(qRes.value.data);
-      }
-      if (fRes.status === "fulfilled" && fRes.value.data) {
-        const d = fRes.value.data;
-        if (d.pe_ttm != null || d.pb_mrq != null || d.main_net_inflow != null) {
-          setFund(d as FundamentalInfo);
-        }
-      }
-    } finally {
-      setLoading(false);
+    } else {
+      signal = item.advice || "";
+      score = item.score || 0;
     }
-  }, [code]);
+    return { id: item.id, summary, signal, score, date: item.date };
+  }, [analysisData]);
 
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
+  const quote: QuoteInfo | null = quoteData || null;
+
+  const fund: FundamentalInfo | null = useMemo(() => {
+    if (!fundData) return null;
+    const d = fundData;
+    if (d.pe_ttm != null || d.pb_mrq != null || d.main_net_inflow != null) {
+      return d as FundamentalInfo;
+    }
+    return null;
+  }, [fundData]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();

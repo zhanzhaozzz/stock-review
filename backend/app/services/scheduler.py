@@ -68,6 +68,25 @@ def setup_scheduler():
         replace_existing=True,
     )
 
+    kline_hour, kline_minute = _shift_time(hour, minute, 7)
+    fund_hour, fund_minute = _shift_time(hour, minute, 8)
+
+    scheduler.add_job(
+        _sync_watchlist_klines,
+        CronTrigger(hour=kline_hour, minute=kline_minute, day_of_week="mon-fri"),
+        id="sync_watchlist_klines",
+        name="预加载自选股K线",
+        replace_existing=True,
+    )
+
+    scheduler.add_job(
+        _sync_watchlist_fundamentals,
+        CronTrigger(hour=fund_hour, minute=fund_minute, day_of_week="mon-fri"),
+        id="sync_watchlist_fundamentals",
+        name="同步自选股基本面",
+        replace_existing=True,
+    )
+
     scheduler.add_job(
         _run_watchlist_rating,
         CronTrigger(hour=rating_hour, minute=rating_minute, day_of_week="mon-fri"),
@@ -86,8 +105,10 @@ def setup_scheduler():
 
     scheduler.start()
     logger.info(
-        "Scheduler started: market@%02d:%02d, news@hourly, watchlist@%02d:%02d, rating@%02d:%02d, review@%02d:%02d",
-        hour, minute, watch_hour, watch_minute, rating_hour, rating_minute, review_hour, review_minute,
+        "Scheduler started: market@%02d:%02d, news@hourly, watchlist@%02d:%02d, "
+        "klines@%02d:%02d, fund@%02d:%02d, rating@%02d:%02d, review@%02d:%02d",
+        hour, minute, watch_hour, watch_minute, kline_hour, kline_minute,
+        fund_hour, fund_minute, rating_hour, rating_minute, review_hour, review_minute,
     )
 
 
@@ -122,6 +143,28 @@ async def _sync_watchlist_quotes():
         logger.info("[Scheduler] Watchlist quotes synced")
     except Exception as e:
         logger.error("[Scheduler] Watchlist sync failed: %s", e)
+
+
+async def _sync_watchlist_klines():
+    """预加载自选股 K 线历史到 SQLite。"""
+    logger.info("[Scheduler] Preloading watchlist klines...")
+    try:
+        from app.api.v1.sync import _preload_watchlist_klines
+        await _preload_watchlist_klines()
+        logger.info("[Scheduler] Watchlist klines preloaded")
+    except Exception as e:
+        logger.error("[Scheduler] Watchlist klines preload failed: %s", e)
+
+
+async def _sync_watchlist_fundamentals():
+    """同步自选股基本面数据到 SQLite。"""
+    logger.info("[Scheduler] Syncing watchlist fundamentals...")
+    try:
+        from app.api.v1.sync import _sync_fundamentals
+        await _sync_fundamentals()
+        logger.info("[Scheduler] Watchlist fundamentals synced")
+    except Exception as e:
+        logger.error("[Scheduler] Watchlist fundamentals sync failed: %s", e)
 
 
 async def _run_watchlist_rating():

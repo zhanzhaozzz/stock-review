@@ -140,7 +140,7 @@ export default function ReviewHistory() {
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-semibold text-muted">日历视图（近90天）</h3>
               <div className="text-xs text-dim">
-                有复盘的日期可点击进入详情
+                点击任意交易日进入复盘，无记录可补充
               </div>
             </div>
             <div className="grid grid-cols-15 gap-2">
@@ -148,22 +148,27 @@ export default function ReviewHistory() {
                 const key = iso(d);
                 const r = reviewMap.get(key);
                 const phase = r?.market_sentiment || "";
-                const cls = phase ? (phaseColors[phase] || "bg-input text-secondary border-edge") : "bg-base text-dim border-gray-900";
+                const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+                const isFuture = d > new Date();
+                const isTradeDay = !isWeekend && !isFuture;
+                const cls = phase ? (phaseColors[phase] || "bg-input text-secondary border-edge") : isTradeDay ? "bg-base text-dim border-gray-800 border-dashed" : "bg-base text-dim border-gray-900";
                 const dim = daysBetween(new Date(), d) < 7 ? "ring-1 ring-blue-500/20" : "";
-                const clickable = !!r && (phaseFilter === "全部" || phase === phaseFilter);
+                const clickable = isTradeDay && (phaseFilter === "全部" || !r || phase === phaseFilter);
                 return (
                   <button
                     key={key}
                     onClick={() => clickable && navigate(`/review?date=${key}`)}
-                    className={`h-14 rounded-lg border p-2 text-left transition ${cls} ${dim} ${clickable ? "hover:bg-card-hover" : "opacity-60 cursor-default"}`}
+                    className={`h-14 rounded-lg border p-2 text-left transition ${cls} ${dim} ${clickable ? "hover:bg-card-hover cursor-pointer" : "opacity-40 cursor-default"}`}
                     disabled={!clickable}
-                    title={r ? `${key} ${phase} 高度${r.market_height}板` : key}
+                    title={r ? `${key} ${phase} 高度${r.market_height}板` : isTradeDay ? `${key} 点击补充复盘` : key}
                   >
                     <div className="text-[11px] font-mono">{key.slice(5)}</div>
                     {r ? (
                       <div className="mt-1 text-[11px] text-secondary/90 truncate">
                         {phase} · {r.market_height}板
                       </div>
+                    ) : isTradeDay ? (
+                      <div className="mt-1 text-[11px] text-dim/60">补盘</div>
                     ) : (
                       <div className="mt-1 text-[11px] text-dim">—</div>
                     )}

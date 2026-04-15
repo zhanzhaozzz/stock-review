@@ -192,6 +192,101 @@ class AKShareFetcher(BaseFetcher):
             return None
 
 
+    async def get_broken_board_pool(self, trade_date: str = "today") -> pd.DataFrame | None:
+        """获取炸板池。"""
+        try:
+            import akshare as ak
+            target = datetime.now().date()
+            if trade_date and trade_date != "today":
+                try:
+                    target = datetime.fromisoformat(trade_date).date()
+                except ValueError:
+                    target = datetime.now().date()
+            df = ak.stock_zt_pool_zbgc_em(date=target.strftime("%Y%m%d"))
+            if df is None or df.empty:
+                return None
+            self.record_success()
+            return df
+        except Exception as e:
+            logger.debug("AKShare get_broken_board_pool failed: %s", e)
+            return None
+
+    async def get_limit_down_pool(self, trade_date: str = "today") -> pd.DataFrame | None:
+        """获取跌停池。"""
+        try:
+            import akshare as ak
+            target = datetime.now().date()
+            if trade_date and trade_date != "today":
+                try:
+                    target = datetime.fromisoformat(trade_date).date()
+                except ValueError:
+                    target = datetime.now().date()
+            df = ak.stock_zt_pool_dtgc_em(date=target.strftime("%Y%m%d"))
+            if df is None or df.empty:
+                return None
+            self.record_success()
+            return df
+        except Exception as e:
+            logger.debug("AKShare get_limit_down_pool failed: %s", e)
+            return None
+
+    async def get_sector_ranking(self, sector_type: str = "concept", limit: int = 30) -> list[dict]:
+        """获取板块排行。"""
+        try:
+            import akshare as ak
+            if sector_type == "concept":
+                df = ak.stock_board_concept_name_em()
+            else:
+                df = ak.stock_board_industry_name_em()
+            if df is None or df.empty:
+                return []
+
+            if "涨跌幅" in df.columns:
+                df = df.sort_values("涨跌幅", ascending=False)
+
+            result = []
+            for _, row in df.head(limit).iterrows():
+                result.append({
+                    "name": str(row.get("板块名称", "")),
+                    "code": str(row.get("板块代码", "")),
+                    "change_pct": float(row.get("涨跌幅", 0) or 0),
+                    "up_count": int(row.get("上涨家数", 0) or 0),
+                    "down_count": int(row.get("下跌家数", 0) or 0),
+                    "source": "akshare",
+                })
+            self.record_success()
+            return result
+        except Exception as e:
+            logger.debug("AKShare get_sector_ranking failed: %s", e)
+            return []
+
+    async def get_market_breadth(self) -> dict | None:
+        """获取涨跌面统计。"""
+        try:
+            import akshare as ak
+            df = ak.stock_zh_a_spot_em()
+            if df is None or df.empty:
+                return None
+
+            up = len(df[df["涨跌幅"] > 0])
+            down = len(df[df["涨跌幅"] < 0])
+            flat = len(df[df["涨跌幅"] == 0])
+            limit_up = 0
+            limit_down = 0
+            if "涨跌幅" in df.columns:
+                limit_up = len(df[df["涨跌幅"] >= 9.9])
+                limit_down = len(df[df["涨跌幅"] <= -9.9])
+            self.record_success()
+            return {
+                "up": up, "down": down, "flat": flat,
+                "limit_up": limit_up, "limit_down": limit_down,
+                "total": len(df),
+            }
+        except Exception as e:
+            logger.debug("AKShare get_market_breadth failed: %s", e)
+            return None
+
+
 def _to_yi(amount: float) -> float:
     amount = float(amount or 0)
     if abs(amount) >= 1_000_000:

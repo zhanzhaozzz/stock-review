@@ -175,6 +175,96 @@ async def _sync_watchlist_quotes() -> dict:
     return await sync_watchlist_quotes()
 
 
+@router.post("/watchlist-klines")
+async def sync_watchlist_klines_api():
+    """批量预加载自选股日线历史 → stock_prices 表。"""
+    return await _preload_watchlist_klines()
+
+
+async def _preload_watchlist_klines() -> dict:
+    """遍历自选股，对本地 K 线不足 30 条的补充拉取 60 日历史并落库。"""
+    from app.models.watchlist import Watchlist
+    from app.models.stock import StockPrice
+    from app.data_provider.manager import get_data_manager
+    from sqlalchemy import func
+
+    synced = 0
+    skipped = 0
+    failed = 0
+    sem = asyncio.Semaphore(3)
+
+    async with async_session() as session:
+        wl_result = await session.execute(select(Watchlist))
+        codes = list({row.code for row in wl_result.scalars().all()})
+
+    if not codes:
+        return {"status": "ok", "synced": 0, "message": "no watchlist stocks"}
+
+    mgr = get_data_manager()
+
+    async def _fetch_one(code: str):
+        nonlocal synced, skipped, failed
+        async with sem:
+            try:
+                async with async_session() as db:
+                    count_result = await db.execute(
+                        select(func.count()).select_from(StockPrice).where(StockPrice.code == code)
+                    )
+                    count = count_result.scalar() or 0
+                    if count >= 30:
+                        skipped += 1
+                        return
+
+                    df = await asyncio.wait_for(mgr.get_daily(code, 60), timeout=15)
+                    if df is None or df.empty:
+                        skipped += 1
+                        return
+
+                    existing_result = await db.execute(
+                        select(StockPrice).where(StockPrice.code == code)
+                    )
+                    existing_map = {str(r.date): r for r in existing_result.scalars().all()}
+
+                    records = df.to_dict(orient="records")
+                    for rec in records:
+                        d = str(rec.get("date", ""))
+                        if not d:
+                            continue
+                        if d in existing_map:
+                            row = existing_map[d]
+                            row.open = rec.get("open")
+                            row.high = rec.get("high")
+                            row.low = rec.get("low")
+                            row.close = rec.get("close")
+                            row.volume = rec.get("volume")
+                            row.turnover = rec.get("turnover")
+                            row.change_pct = rec.get("change_pct")
+                        else:
+                            try:
+                                db.add(StockPrice(
+                                    code=code,
+                                    date=date.fromisoformat(d),
+                                    open=rec.get("open"),
+                                    high=rec.get("high"),
+                                    low=rec.get("low"),
+                                    close=rec.get("close"),
+                                    volume=rec.get("volume"),
+                                    turnover=rec.get("turnover"),
+                                    change_pct=rec.get("change_pct"),
+                                ))
+                            except (ValueError, TypeError):
+                                continue
+                    await db.commit()
+                    synced += 1
+            except Exception as e:
+                logger.warning("Kline preload failed for %s: %s", code, e)
+                failed += 1
+
+    await asyncio.gather(*[_fetch_one(c) for c in codes])
+    logger.info("Watchlist klines preload done: synced=%d, skipped=%d, failed=%d", synced, skipped, failed)
+    return {"status": "ok", "synced": synced, "skipped": skipped, "failed": failed}
+
+
 @router.post("/fundamentals")
 async def sync_fundamentals_api():
     """采集自选股基本面数据 → stock_fundamentals 表。"""

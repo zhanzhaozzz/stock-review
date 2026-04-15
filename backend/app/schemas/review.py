@@ -33,7 +33,11 @@ class DailyReviewItem(BaseModel):
     main_sectors: str = ""
     sub_sectors: str = ""
     market_style: str = ""
+    broken_boards: str = ""
     broken_high_stock: str = ""
+    sentiment_cycle_sub: str = ""
+    index_sentiment_sh: str = ""
+    index_sentiment_csm: str = ""
     conclusion_quadrant: str = ""
     review_summary: str = ""
     next_day_plan: str = ""
@@ -54,6 +58,12 @@ class ReviewUpdateRequest(BaseModel):
     status: Optional[ReviewStatus] = None
     market_sentiment: Optional[str] = None
     sentiment_cycle_main: Optional[SentimentCycleMain] = None
+    market_height: Optional[int] = None
+    market_leader: Optional[str] = None
+    total_limit_up: Optional[int] = None
+    first_board_count: Optional[int] = None
+    broken_board_count: Optional[int] = None
+    broken_boards: Optional[str] = None
     dragon_stock: Optional[str] = None
     core_middle_stock: Optional[str] = None
     market_ladder: Optional[str] = None
@@ -63,6 +73,9 @@ class ReviewUpdateRequest(BaseModel):
     sub_sectors: Optional[str] = None
     market_style: Optional[str] = None
     broken_high_stock: Optional[str] = None
+    sentiment_cycle_sub: Optional[str] = None
+    index_sentiment_sh: Optional[str] = None
+    index_sentiment_csm: Optional[str] = None
     conclusion_quadrant: Optional[ConclusionQuadrant] = None
     review_summary: Optional[str] = None
     next_day_plan: Optional[str] = None

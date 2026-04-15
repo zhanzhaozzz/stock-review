@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 
 from app.api.v1 import market, ratings, watchlist, news, sync
-from app.api.v1 import analysis, review, strategy, operations
+from app.api.v1 import analysis, review, strategy, operations, quote
 from app.config import get_settings
 
 api_router = APIRouter(prefix="/api/v1")
@@ -15,6 +15,7 @@ api_router.include_router(analysis.router, prefix="/analysis", tags=["analysis"]
 api_router.include_router(review.router, prefix="/review", tags=["review"])
 api_router.include_router(strategy.router, prefix="/strategies", tags=["strategies"])
 api_router.include_router(operations.router, prefix="/operations", tags=["operations"])
+api_router.include_router(quote.router, prefix="/quotes", tags=["quotes"])
 
 
 @api_router.get("/health", tags=["system"])

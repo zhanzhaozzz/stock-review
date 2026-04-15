@@ -5,6 +5,8 @@ from datetime import date
 
 import pandas as pd
 
+from app.data_provider.circuit_breaker import CircuitBreaker
+
 logger = logging.getLogger(__name__)
 
 
@@ -14,6 +16,9 @@ class BaseFetcher(ABC):
     name: str = "base"
     consecutive_failures: int = 0
     MAX_FAILURES: int = 3
+
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
 
     @abstractmethod
     async def get_daily(self, code: str, days: int = 120) -> pd.DataFrame | None:

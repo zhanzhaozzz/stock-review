@@ -24,9 +24,12 @@ interface ReviewItem {
   main_sectors: string;
   sub_sectors: string;
   market_style: string;
-  broken_high_stock: string;
-  conclusion_quadrant: string;
   broken_boards: string;
+  broken_high_stock: string;
+  sentiment_cycle_sub: string;
+  index_sentiment_sh: string;
+  index_sentiment_csm: string;
+  conclusion_quadrant: string;
   review_summary: string;
   next_day_plan: string;
   next_day_prediction: string;
@@ -61,6 +64,52 @@ interface LimitUpData {
 
 const phaseOptions = ["启动期", "发酵期", "高潮期", "高位混沌期", "退潮期", "低位混沌期"];
 const quadrantOptions = ["情指共振", "情好指差", "情差指好", "情指双杀"];
+
+function ComboBox({
+  value,
+  onChange,
+  options,
+  placeholder = "",
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  options: string[];
+  placeholder?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const filtered = options.filter(
+    (o) => !value || o.includes(value),
+  );
+  return (
+    <div className="relative">
+      <input
+        className="w-full bg-input border border-edge rounded-lg px-3 py-2 text-sm"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        placeholder={placeholder || "可选择或输入"}
+      />
+      {open && filtered.length > 0 && (
+        <ul className="absolute z-20 mt-1 w-full bg-card border border-edge rounded-lg shadow-lg max-h-48 overflow-y-auto">
+          {filtered.map((o) => (
+            <li
+              key={o}
+              className={`px-3 py-2 text-sm cursor-pointer hover:bg-card-hover transition ${o === value ? "text-blue-400" : ""}`}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                onChange(o);
+                setOpen(false);
+              }}
+            >
+              {o}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
 
 const phaseColors: Record<string, string> = {
   "启动期": "text-cyan-300 bg-cyan-500/10 border-cyan-500/30",
@@ -116,11 +165,16 @@ export default function DailyReview() {
   async function handleGenerate() {
     setGenerating(true);
     try {
-      await api.post("/review/generate");
+      const params = dateParam ? `?target_date=${dateParam}` : "";
+      await api.post(`/review/generate${params}`);
       await loadData();
     } catch (e: any) {
-      if (e.response?.status === 409) {
-        alert("今日复盘已存在，可直接编辑确认");
+      const status = e.response?.status;
+      const detail = e.response?.data?.detail || e.message || "未知错误";
+      if (status === 409) {
+        alert("该日期复盘已存在，可直接编辑确认");
+      } else {
+        alert(`生成复盘失败: ${detail}`);
       }
     } finally {
       setGenerating(false);
@@ -147,6 +201,9 @@ export default function DailyReview() {
         sub_sectors: form.sub_sectors,
         market_style: form.market_style,
         broken_high_stock: form.broken_high_stock,
+        sentiment_cycle_sub: form.sentiment_cycle_sub,
+        index_sentiment_sh: form.index_sentiment_sh,
+        index_sentiment_csm: form.index_sentiment_csm,
         conclusion_quadrant: conclusionQuadrant,
         next_day_prediction: form.next_day_prediction,
         next_day_mode: form.next_day_mode,
@@ -196,15 +253,13 @@ export default function DailyReview() {
           <h2 className="text-xl font-bold">{isHistoryMode ? `历史复盘 (${dateParam})` : "每日复盘工作台"}</h2>
         </div>
         <div className="flex items-center gap-2">
-          {!isHistoryMode && (
-            <button
-              onClick={handleGenerate}
-              disabled={generating}
-              className="px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-500 disabled:opacity-50 rounded-lg transition"
-            >
-              {generating ? "生成中..." : "生成草稿"}
-            </button>
-          )}
+          <button
+            onClick={handleGenerate}
+            disabled={generating}
+            className="px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-500 disabled:opacity-50 rounded-lg transition"
+          >
+            {generating ? "生成中..." : isHistoryMode ? "补充复盘" : "生成草稿"}
+          </button>
           <button
             onClick={() => handleSave(false)}
             disabled={saving || !review}
@@ -229,7 +284,7 @@ export default function DailyReview() {
           {isHistoryMode ? (
             <>
               <p>{dateParam} 无复盘记录</p>
-              <p className="text-xs mt-2 text-dim">该日期没有生成过复盘</p>
+              <p className="text-xs mt-2 text-dim">点击上方"补充复盘"按钮为该日期生成复盘草稿</p>
             </>
           ) : (
             <>
@@ -291,6 +346,28 @@ export default function DailyReview() {
                   <div>
                     <div className="text-dim text-xs">连板晋级率</div>
                     <div className="mt-1">{ladder?.promotion_rate_text || "—"}</div>
+                  </div>
+                  <div>
+                    <div className="text-dim text-xs">市场高度</div>
+                    <div className="mt-1">{review.market_height || ladder?.market_height || "—"}板</div>
+                  </div>
+                  <div>
+                    <div className="text-dim text-xs">龙头</div>
+                    <div className="mt-1">{review.dragon_stock || review.market_leader || ladder?.market_leader?.name || "—"}</div>
+                  </div>
+                  <div>
+                    <div className="text-dim text-xs">涨停数 / 首板 / 炸板</div>
+                    <div className="mt-1">
+                      <span className="text-up">{review.total_limit_up || "—"}</span>
+                      {" / "}
+                      <span>{review.first_board_count || "—"}</span>
+                      {" / "}
+                      <span className="text-yellow-300">{review.broken_board_count || "—"}</span>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-dim text-xs">跌停数</div>
+                    <div className="mt-1 text-down">{ladder?.limit_down_count ?? "—"}</div>
                   </div>
                 </div>
               </div>
@@ -362,29 +439,52 @@ export default function DailyReview() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs text-dim block mb-1">情绪周期</label>
-                  <select
-                    className="w-full bg-input border border-edge rounded-lg px-3 py-2 text-sm"
+                  <ComboBox
                     value={form.sentiment_cycle_main || ""}
-                    onChange={(e) => setForm((p) => ({ ...p, sentiment_cycle_main: e.target.value, market_sentiment: e.target.value }))}
-                  >
-                    <option value="">未选择</option>
-                    {phaseOptions.map((p) => (
-                      <option key={p} value={p}>{p}</option>
-                    ))}
-                  </select>
+                    onChange={(v) => setForm((p) => ({ ...p, sentiment_cycle_main: v, market_sentiment: v }))}
+                    options={phaseOptions}
+                    placeholder="选择或输入情绪周期"
+                  />
                 </div>
                 <div>
                   <label className="text-xs text-dim block mb-1">四象限结论</label>
-                  <select
-                    className="w-full bg-input border border-edge rounded-lg px-3 py-2 text-sm"
+                  <ComboBox
                     value={form.conclusion_quadrant || ""}
-                    onChange={(e) => setForm((p) => ({ ...p, conclusion_quadrant: e.target.value }))}
-                  >
-                    <option value="">未选择</option>
-                    {quadrantOptions.map((q) => (
-                      <option key={q} value={q}>{q}</option>
-                    ))}
-                  </select>
+                    onChange={(v) => setForm((p) => ({ ...p, conclusion_quadrant: v }))}
+                    options={quadrantOptions}
+                    placeholder="选择或输入四象限结论"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs text-dim block mb-1">情绪周期次线</label>
+                <input
+                  className="w-full bg-input border border-edge rounded-lg px-3 py-2 text-sm"
+                  value={form.sentiment_cycle_sub || ""}
+                  onChange={(e) => setForm((p) => ({ ...p, sentiment_cycle_sub: e.target.value }))}
+                  placeholder="如：启动、发酵、高潮延伸"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-dim block mb-1">上证情绪阶段</label>
+                  <input
+                    className="w-full bg-input border border-edge rounded-lg px-3 py-2 text-sm"
+                    value={form.index_sentiment_sh || ""}
+                    onChange={(e) => setForm((p) => ({ ...p, index_sentiment_sh: e.target.value }))}
+                    placeholder="如：下跌一阶混沌修复"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-dim block mb-1">中小创情绪阶段</label>
+                  <input
+                    className="w-full bg-input border border-edge rounded-lg px-3 py-2 text-sm"
+                    value={form.index_sentiment_csm || ""}
+                    onChange={(e) => setForm((p) => ({ ...p, index_sentiment_csm: e.target.value }))}
+                    placeholder="如：高位混沌分歧转修复"
+                  />
                 </div>
               </div>
 

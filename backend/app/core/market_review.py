@@ -1,4 +1,8 @@
-"""市场总览 — 大盘指数、涨跌面、板块排行、资金流向。"""
+"""市场总览 — 大盘指数、涨跌面、板块排行、资金流向。
+
+数据获取优先走 DataFetcherManager 统一入口，减少直连外部库。
+仅 HSI 恒生指数、板块成分股、资金流向等无法走 Manager 的场景保留 akshare 直连。
+"""
 import logging
 from datetime import date, datetime, timedelta
 
@@ -13,15 +17,12 @@ INDEX_LIST = [
 
 
 async def get_market_overview() -> dict:
-    """获取大盘指数 + 涨跌面统计。
-
-    涨跌面通过 AKShare 获取（较慢），所以分两步：先返回指数，涨跌面单独缓存/异步。
-    """
+    """获取大盘指数 + 涨跌面统计。"""
     indices = []
     for idx in INDEX_LIST:
         try:
             if idx["code"] == "HSI":
-                quote = _get_hsi_quote()
+                quote = await _get_hsi_quote()
             else:
                 quote = await _get_index_quote(idx["code"])
             if quote:
@@ -40,7 +41,7 @@ async def get_market_overview() -> dict:
 
 
 async def get_market_breadth() -> dict:
-    """涨跌面统计 — 独立函数，方便单独缓存。"""
+    """涨跌面统计 — 通过 DataFetcherManager 获取。"""
     from app.cache import cache_get, cache_set
 
     cached = await cache_get("sr:market:breadth")
@@ -49,16 +50,16 @@ async def get_market_breadth() -> dict:
 
     breadth = {"up": 0, "down": 0, "flat": 0, "limit_up": 0, "limit_down": 0, "total": 0}
     try:
-        import akshare as ak
-        df = ak.stock_zh_a_spot_em()
-        if df is not None and not df.empty:
-            pct = df["涨跌幅"]
-            breadth["up"] = int((pct > 0).sum())
-            breadth["down"] = int((pct < 0).sum())
-            breadth["flat"] = int((pct == 0).sum())
-            breadth["limit_up"] = int((pct >= 9.9).sum())
-            breadth["limit_down"] = int((pct <= -9.9).sum())
-            breadth["total"] = len(df)
+        from app.data_provider.manager import get_data_manager
+        manager = get_data_manager()
+        result = await manager.get_market_breadth()
+        if result:
+            breadth["up"] = result.get("up", 0)
+            breadth["down"] = result.get("down", 0)
+            breadth["flat"] = result.get("flat", 0)
+            breadth["limit_up"] = result.get("limit_up", 0)
+            breadth["limit_down"] = result.get("limit_down", 0)
+            breadth["total"] = result.get("total", 0)
         await cache_set("sr:market:breadth", breadth, ttl=120)
     except Exception as e:
         logger.warning("Failed to get breadth: %s", e)
@@ -71,10 +72,20 @@ async def _get_index_quote(code: str) -> dict | None:
     return await get_tencent_quote(code)
 
 
-def _get_hsi_quote() -> dict | None:
+async def _get_hsi_quote() -> dict | None:
+    """获取恒生指数行情 — 优先腾讯接口，降级 akshare。"""
     try:
+        from app.data_provider.realtime import get_tencent_quote
+        quote = await get_tencent_quote("HSI")
+        if quote:
+            return quote
+    except Exception as e:
+        logger.debug("Tencent HSI quote failed: %s", e)
+
+    try:
+        import asyncio
         import akshare as ak
-        df = ak.stock_hk_index_spot_em()
+        df = await asyncio.to_thread(ak.stock_hk_index_spot_em)
         if df is None or df.empty:
             return None
         row = df[df["代码"] == "HSI"]
@@ -87,51 +98,29 @@ def _get_hsi_quote() -> dict | None:
             "change": float(r.get("涨跌额", 0)),
             "change_pct": float(r.get("涨跌幅", 0)),
         }
-    except Exception:
+    except Exception as e:
+        logger.warning("AKShare HSI quote failed: %s", e)
         return None
 
 
 async def get_sector_ranking(sector_type: str = "concept", limit: int = 30) -> list[dict]:
-    """板块排行 — 概念/行业 + 资金流向。"""
-    import akshare as ak
+    """板块排行 — 通过 DataFetcherManager 获取（akshare -> tushare fallback）。"""
     try:
-        if sector_type == "industry":
-            df = ak.stock_board_industry_name_em()
-        else:
-            df = ak.stock_board_concept_name_em()
-
-        if df is None or df.empty:
-            return []
-
-        col_map = {
-            "板块名称": "name", "板块代码": "code",
-            "最新价": "price", "涨跌幅": "change_pct",
-            "总市值": "market_cap", "换手率": "turnover_rate",
-            "上涨家数": "up_count", "下跌家数": "down_count",
-        }
-        df = df.rename(columns={k: v for k, v in col_map.items() if k in df.columns})
-
-        result = []
-        for _, row in df.head(limit).iterrows():
-            item = {
-                "name": row.get("name", ""),
-                "change_pct": float(row.get("change_pct", 0) or 0),
-                "up_count": int(row.get("up_count", 0) or 0),
-                "down_count": int(row.get("down_count", 0) or 0),
-            }
-            result.append(item)
-
-        return sorted(result, key=lambda x: x["change_pct"], reverse=True)
-
+        from app.data_provider.manager import get_data_manager
+        manager = get_data_manager()
+        result = await manager.get_sector_ranking(sector_type, limit)
+        if result:
+            return result
     except Exception as e:
-        logger.warning("get_sector_ranking failed: %s", e)
-        return []
+        logger.warning("get_sector_ranking via manager failed: %s", e)
+
+    return []
 
 
 async def get_sector_constituents(board_name: str, limit: int = 30) -> list[dict]:
     """获取概念板块的成分股列表。"""
+    import asyncio
     from app.cache import cache_get, cache_set
-    import akshare as ak
 
     cache_key = f"sr:sector:cons:{board_name}"
     cached = await cache_get(cache_key)
@@ -139,7 +128,8 @@ async def get_sector_constituents(board_name: str, limit: int = 30) -> list[dict
         return cached[:limit]
 
     try:
-        df = ak.stock_board_concept_cons_em(symbol=board_name)
+        import akshare as ak
+        df = await asyncio.to_thread(ak.stock_board_concept_cons_em, symbol=board_name)
         if df is None or df.empty:
             return []
 
@@ -180,9 +170,12 @@ async def get_sector_constituents(board_name: str, limit: int = 30) -> list[dict
 
 async def get_money_flow() -> list[dict]:
     """行业资金流向。"""
+    import asyncio
     import akshare as ak
     try:
-        df = ak.stock_sector_fund_flow_rank(indicator="今日", sector_type="行业资金流")
+        df = await asyncio.to_thread(
+            ak.stock_sector_fund_flow_rank, indicator="今日", sector_type="行业资金流"
+        )
         if df is None or df.empty:
             return []
 
@@ -202,40 +195,20 @@ async def get_money_flow() -> list[dict]:
 
 
 async def get_total_volume_with_delta(target_date: str = "today") -> dict:
-    """获取沪深成交额与较上一交易日的增缩量。"""
-    import akshare as ak
-
+    """获取沪深成交额与较上一交易日的增缩量 — 通过 DataFetcherManager 获取。"""
     try:
-        trade_day = _parse_trade_day(target_date)
-        start_day = trade_day - timedelta(days=15)
-        start_str = start_day.strftime("%Y%m%d")
-        end_str = trade_day.strftime("%Y%m%d")
-
-        sh_hist = ak.index_zh_a_hist(symbol="000001", period="daily", start_date=start_str, end_date=end_str)
-        sz_hist = ak.index_zh_a_hist(symbol="399001", period="daily", start_date=start_str, end_date=end_str)
-        if sh_hist is None or sh_hist.empty or sz_hist is None or sz_hist.empty:
-            return {"total_volume": "", "total_amount_yi": 0.0, "delta_amount_yi": 0.0, "trend": "平量"}
-
-        sh_vals = sh_hist["成交额"].dropna().tolist()
-        sz_vals = sz_hist["成交额"].dropna().tolist()
-        if len(sh_vals) < 2 or len(sz_vals) < 2:
-            return {"total_volume": "", "total_amount_yi": 0.0, "delta_amount_yi": 0.0, "trend": "平量"}
-
-        current_amount_yi = _to_yi(sh_vals[-1]) + _to_yi(sz_vals[-1])
-        prev_amount_yi = _to_yi(sh_vals[-2]) + _to_yi(sz_vals[-2])
-        delta_yi = current_amount_yi - prev_amount_yi
-        delta_sign = "+" if delta_yi >= 0 else ""
-        trend = "增量" if delta_yi > 0 else "缩量" if delta_yi < 0 else "平量"
-
-        return {
-            "total_volume": f"{current_amount_yi:.0f}亿 {delta_sign}{delta_yi:.0f}亿",
-            "total_amount_yi": round(current_amount_yi, 2),
-            "delta_amount_yi": round(delta_yi, 2),
-            "trend": trend,
-        }
+        from app.data_provider.manager import get_data_manager
+        manager = get_data_manager()
+        result = await manager.get_market_turnover(target_date)
+        if result:
+            delta = result.get("delta_amount_yi", 0.0)
+            trend = "增量" if delta > 0 else "缩量" if delta < 0 else "平量"
+            result["trend"] = trend
+            return result
     except Exception as e:
-        logger.warning("get_total_volume_with_delta failed: %s", e)
-        return {"total_volume": "", "total_amount_yi": 0.0, "delta_amount_yi": 0.0, "trend": "平量"}
+        logger.warning("get_total_volume_with_delta via manager failed: %s", e)
+
+    return {"total_volume": "", "total_amount_yi": 0.0, "delta_amount_yi": 0.0, "trend": "平量"}
 
 
 async def get_daily_context(
@@ -279,13 +252,6 @@ async def get_daily_context(
         "sector_ranking": sector_ranking,
         "limit_up_data": limit_up_data,
     }
-
-
-def _to_yi(amount: float) -> float:
-    amount = float(amount or 0)
-    if abs(amount) >= 1_000_000:
-        return amount / 100_000_000
-    return amount
 
 
 def _parse_trade_day(target_date: str) -> date:

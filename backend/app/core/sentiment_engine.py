@@ -14,13 +14,10 @@ import logging
 from typing import Optional
 
 from app.config import get_settings
+from app.core.enums import CYCLE_PHASES
 from app.llm.client import chat
 
 logger = logging.getLogger(__name__)
-
-CYCLE_PHASES = [
-    "冰点", "启动", "发酵", "高潮", "高位混沌", "分歧", "退潮",
-]
 
 
 def judge_cycle_by_rules(limit_up_data: dict, prev_phases: list[str] = None) -> dict:

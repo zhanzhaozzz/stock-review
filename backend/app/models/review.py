@@ -17,6 +17,9 @@ class DailyReview(Base):
     # --- 市场情绪 ---
     market_sentiment: Mapped[str | None] = mapped_column(String(20))
     sentiment_cycle_main: Mapped[str | None] = mapped_column(String(20))
+    sentiment_cycle_sub: Mapped[str | None] = mapped_column(String(50))
+    index_sentiment_sh: Mapped[str | None] = mapped_column(String(100))
+    index_sentiment_csm: Mapped[str | None] = mapped_column(String(100))
     market_height: Mapped[int | None] = mapped_column(Integer)
     market_leader: Mapped[str | None] = mapped_column(String(100))
     dragon_stock: Mapped[str | None] = mapped_column(String(100))

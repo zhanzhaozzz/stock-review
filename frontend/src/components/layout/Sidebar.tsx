@@ -7,6 +7,7 @@ const navItems = [
   // { to: "/news", label: "新闻聚合", icon: "📰" },
   { to: "/review", label: "每日复盘", icon: "📝" },
   { to: "/review/history", label: "历史复盘", icon: "📅" },
+  { to: "/quotes", label: "交易语录", icon: "💬" },
   // { to: "/strategies", label: "战法库", icon: "🎯" },
   // { to: "/operations", label: "操作记录", icon: "📋" },
   { to: "/settings", label: "设置", icon: "⚙️" },

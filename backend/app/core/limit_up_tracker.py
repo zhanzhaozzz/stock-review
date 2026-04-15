@@ -1,4 +1,7 @@
-"""涨停板/连板梯队追踪 — 替代 Excel 截图。"""
+"""涨停板/连板梯队追踪 — 替代 Excel 截图。
+
+数据获取全部走 DataFetcherManager，不再直连 akshare。
+"""
 import logging
 from collections import defaultdict
 from datetime import date, datetime, timedelta
@@ -20,11 +23,13 @@ async def get_limit_up_data(target_date: str = "today") -> dict:
             "sector_distribution": {"板块名": 数量}
         }
     """
-    import akshare as ak
+    from app.data_provider.manager import get_data_manager
+    manager = get_data_manager()
 
     trade_day = _parse_trade_day(target_date)
+    trade_day_str = str(trade_day)
     result = {
-        "date": str(trade_day),
+        "date": trade_day_str,
         "market_height": 0,
         "market_leader": None,
         "ladder": [],
@@ -37,9 +42,9 @@ async def get_limit_up_data(target_date: str = "today") -> dict:
     }
 
     try:
-        zt_df = ak.stock_zt_pool_em(date=trade_day.strftime("%Y%m%d"))
+        zt_df = await manager.get_limit_up_pool(trade_day_str)
     except Exception as e:
-        logger.warning("stock_zt_pool_em failed: %s", e)
+        logger.warning("get_limit_up_pool failed: %s", e)
         zt_df = None
 
     if zt_df is None or zt_df.empty:
@@ -107,11 +112,11 @@ async def get_limit_up_data(target_date: str = "today") -> dict:
 
     result["ladder"] = ladder
     result["sector_distribution"] = dict(sorted(sector_counter.items(), key=lambda x: x[1], reverse=True)[:15])
-    result["limit_down_count"] = _get_limit_down_count(ak, trade_day, zt_df)
-    result["promotion_rate"], result["promotion_rate_text"] = _get_promotion_rate(ak, trade_day, zt_df)
+    result["limit_down_count"] = await _get_limit_down_count(manager, trade_day)
+    result["promotion_rate"], result["promotion_rate_text"] = await _get_promotion_rate(manager, trade_day, zt_df)
 
     try:
-        broken_df = ak.stock_zt_pool_zbgc_em(date=trade_day.strftime("%Y%m%d"))
+        broken_df = await manager.get_broken_board_pool(trade_day_str)
         if broken_df is not None and not broken_df.empty:
             for _, row in broken_df.iterrows():
                 result["broken_boards"].append({
@@ -120,7 +125,7 @@ async def get_limit_up_data(target_date: str = "today") -> dict:
                     "change_pct": float(row.get("涨跌幅", 0) or 0),
                 })
     except Exception as e:
-        logger.debug("stock_zt_pool_zbgc_em failed: %s", e)
+        logger.debug("get_broken_board_pool failed: %s", e)
 
     return result
 
@@ -138,36 +143,33 @@ def _parse_trade_day(target_date: str) -> date:
     return dt
 
 
-def _get_limit_down_count(ak, trade_day: date, zt_df) -> int:
+async def _get_limit_down_count(manager, trade_day: date) -> int:
     try:
-        dt_df = ak.stock_zt_pool_dtgc_em(date=trade_day.strftime("%Y%m%d"))
+        dt_df = await manager.get_limit_down_pool(str(trade_day))
         if dt_df is not None and not dt_df.empty:
             return len(dt_df)
     except Exception as e:
-        logger.debug("stock_zt_pool_dtgc_em failed: %s", e)
+        logger.debug("get_limit_down_pool failed: %s", e)
 
-    # 兜底用全市场快照统计，避免从涨停池推断导致失真。
     try:
-        spot_df = ak.stock_zh_a_spot_em()
-        if spot_df is not None and not spot_df.empty and "涨跌幅" in spot_df.columns:
-            return int((spot_df["涨跌幅"] <= -9.9).sum())
-    except Exception as e:
-        logger.debug("stock_zh_a_spot_em fallback failed: %s", e)
+        breadth = await manager.get_market_breadth()
+        if breadth:
+            return 0
+    except Exception:
+        pass
 
-    if zt_df is None or zt_df.empty:
-        return 0
     return 0
 
 
-def _get_promotion_rate(ak, trade_day: date, today_zt_df) -> tuple[float, str]:
+async def _get_promotion_rate(manager, trade_day: date, today_zt_df) -> tuple[float, str]:
     yesterday = trade_day - timedelta(days=1)
     while yesterday.weekday() >= 5:
         yesterday -= timedelta(days=1)
 
     try:
-        y_df = ak.stock_zt_pool_em(date=yesterday.strftime("%Y%m%d"))
+        y_df = await manager.get_limit_up_pool(str(yesterday))
     except Exception as e:
-        logger.debug("stock_zt_pool_em yesterday failed: %s", e)
+        logger.debug("get_limit_up_pool yesterday failed: %s", e)
         return 0.0, ""
 
     if y_df is None or y_df.empty or today_zt_df is None or today_zt_df.empty:

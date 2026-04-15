@@ -11,7 +11,9 @@ async def get_tencent_quote(code: str) -> dict | None:
     """Fetch realtime quote from Tencent finance API."""
     try:
         clean = code.split(".")[0].strip()
-        if code.endswith(".SH") or clean.startswith("6"):
+        if code.upper() == "HSI":
+            tc_code = "hkHSI"
+        elif code.endswith(".SH") or clean.startswith("6"):
             tc_code = f"sh{clean}"
         elif code.endswith(".HK"):
             tc_code = f"hk{clean}"

@@ -10,6 +10,7 @@ from app.models.user import User
 from app.models.llm_usage import LLMUsage
 from app.models.market import MarketSnapshot
 from app.models.fundamental import StockFundamental
+from app.models.quote import TradingQuote
 
 __all__ = [
     "Stock", "StockPrice",
@@ -24,4 +25,5 @@ __all__ = [
     "User",
     "LLMUsage",
     "StockFundamental",
+    "TradingQuote",
 ]
