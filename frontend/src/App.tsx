@@ -13,6 +13,7 @@ import Strategies from "./pages/Strategies";
 import Operations from "./pages/Operations";
 import Settings from "./pages/Settings";
 import TradingQuotes from "./pages/TradingQuotes";
+import CandidatePool from "./pages/CandidatePool";
 import Placeholder from "./pages/Placeholder";
 
 export default function App() {
@@ -22,6 +23,7 @@ export default function App() {
         <Routes>
           <Route element={<Shell />}>
             <Route index element={<Dashboard />} />
+            <Route path="candidates" element={<CandidatePool />} />
             <Route path="ratings" element={<RatingBoard />} />
             <Route path="watchlist" element={<Watchlist />} />
             <Route path="news" element={<News />} />
