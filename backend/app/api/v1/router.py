@@ -3,6 +3,7 @@ from fastapi import APIRouter
 from app.api.v1 import market, ratings, watchlist, news, sync
 from app.api.v1 import analysis, review, strategy, operations, quote
 from app.api.v1 import combat_desk, candidate_pool, post_market_review
+from app.api.v1 import generate
 from app.config import get_settings
 
 api_router = APIRouter(prefix="/api/v1")
@@ -20,6 +21,7 @@ api_router.include_router(quote.router, prefix="/quotes", tags=["quotes"])
 api_router.include_router(combat_desk.router, prefix="/combat-desk", tags=["combat-desk"])
 api_router.include_router(candidate_pool.router, prefix="/candidates", tags=["candidates"])
 api_router.include_router(post_market_review.router, prefix="/post-market-review", tags=["post-market-review"])
+api_router.include_router(generate.router, prefix="/generate", tags=["generate"])
 
 
 @api_router.get("/health", tags=["system"])

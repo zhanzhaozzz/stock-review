@@ -1,11 +1,24 @@
 """定时任务调度 — 使用 APScheduler 在收盘后自动刷新数据。
 
-任务列表:
+=== 旧任务（保留） ===
   1. 同步市场数据 (15:30)
   2. 同步新闻数据 (每小时 9:00-20:00)
   3. 同步自选股行情 (15:35)
   4. 执行自选股评级 (15:40)
   5. 执行每日复盘 (15:50)
+
+=== V1 新任务组 (Phase 2) ===
+  A. 市场状态任务组
+    A1. 同步收盘市场数据 — 复用 sync_market (15:30)
+    A2. 生成 MarketStateDaily (15:35)
+  B. 盘前简报任务组
+    B1. 抓取隔夜上下文 (07:50) — 复用 sync_news
+    B2. 生成 BattleBrief (08:00)
+  C. 候选池任务组
+    C2. 生成 CandidatePoolEntry (08:15)
+  D. 盘后全局复盘任务组
+    D1. 回填候选验证结果 (15:35)
+    D2. 生成 PostMarketReview (16:00)
 """
 import logging
 from datetime import date
@@ -34,7 +47,7 @@ def get_scheduler() -> AsyncIOScheduler:
 
 
 def setup_scheduler():
-    """注册所有定时任务。"""
+    """注册所有定时任务（旧任务保留 + V1 新任务组）。"""
     scheduler = get_scheduler()
     settings = get_settings()
 
@@ -44,6 +57,7 @@ def setup_scheduler():
     rating_hour, rating_minute = _shift_time(hour, minute, 10)
     review_hour, review_minute = _shift_time(hour, minute, 20)
 
+    # ── 旧任务（保留不动） ────────────────────────────
     scheduler.add_job(
         _sync_market_data,
         CronTrigger(hour=hour, minute=minute, day_of_week="mon-fri"),
@@ -103,14 +117,75 @@ def setup_scheduler():
         replace_existing=True,
     )
 
-    scheduler.start()
-    logger.info(
-        "Scheduler started: market@%02d:%02d, news@hourly, watchlist@%02d:%02d, "
-        "klines@%02d:%02d, fund@%02d:%02d, rating@%02d:%02d, review@%02d:%02d",
-        hour, minute, watch_hour, watch_minute, kline_hour, kline_minute,
-        fund_hour, fund_minute, rating_hour, rating_minute, review_hour, review_minute,
+    # ── V1 新任务组 A: 市场状态 ─────────────────────────
+    ms_hour, ms_minute = _shift_time(hour, minute, 5)
+    scheduler.add_job(
+        _v1_generate_market_state,
+        CronTrigger(hour=ms_hour, minute=ms_minute, day_of_week="mon-fri"),
+        id="v1_generate_market_state",
+        name="[V1] 生成 MarketStateDaily",
+        replace_existing=True,
     )
 
+    # ── V1 新任务组 B: 盘前简报 ─────────────────────────
+    scheduler.add_job(
+        _v1_sync_overnight_context,
+        CronTrigger(hour=7, minute=50, day_of_week="mon-fri"),
+        id="v1_sync_overnight",
+        name="[V1] 抓取隔夜上下文",
+        replace_existing=True,
+    )
+
+    scheduler.add_job(
+        _v1_generate_battle_brief,
+        CronTrigger(hour=8, minute=0, day_of_week="mon-fri"),
+        id="v1_generate_battle_brief",
+        name="[V1] 生成 BattleBrief",
+        replace_existing=True,
+    )
+
+    # ── V1 新任务组 C: 候选池 ──────────────────────────
+    scheduler.add_job(
+        _v1_generate_candidates,
+        CronTrigger(hour=8, minute=15, day_of_week="mon-fri"),
+        id="v1_generate_candidates",
+        name="[V1] 生成 CandidatePoolEntry",
+        replace_existing=True,
+    )
+
+    # ── V1 新任务组 D: 盘后复盘 ─────────────────────────
+    d1_hour, d1_minute = _shift_time(hour, minute, 5)
+    scheduler.add_job(
+        _v1_backfill_candidate_review,
+        CronTrigger(hour=d1_hour, minute=d1_minute, day_of_week="mon-fri"),
+        id="v1_backfill_candidate_review",
+        name="[V1] 回填候选验证结果",
+        replace_existing=True,
+    )
+
+    scheduler.add_job(
+        _v1_generate_post_market_review,
+        CronTrigger(hour=16, minute=0, day_of_week="mon-fri"),
+        id="v1_generate_post_market_review",
+        name="[V1] 生成 PostMarketReview",
+        replace_existing=True,
+    )
+
+    scheduler.start()
+    logger.info(
+        "Scheduler started — 旧任务: market@%02d:%02d, news@hourly, watchlist@%02d:%02d, "
+        "klines@%02d:%02d, fund@%02d:%02d, rating@%02d:%02d, review@%02d:%02d | "
+        "V1新增: MarketState@%02d:%02d, Overnight@07:50, BattleBrief@08:00, "
+        "Candidates@08:15, CandidateReview@%02d:%02d, PostMarketReview@16:00",
+        hour, minute, watch_hour, watch_minute, kline_hour, kline_minute,
+        fund_hour, fund_minute, rating_hour, rating_minute, review_hour, review_minute,
+        ms_hour, ms_minute, d1_hour, d1_minute,
+    )
+
+
+# ════════════════════════════════════════════════════
+# 旧任务实现（保留不动）
+# ════════════════════════════════════════════════════
 
 async def _sync_market_data():
     """同步市场总览到 SQLite。"""
@@ -312,3 +387,108 @@ async def _run_daily_review():
             logger.info("[Scheduler] Daily review completed: %s", cycle.get("phase", ""))
     except Exception as e:
         logger.error("[Scheduler] Review task failed: %s", e)
+
+
+# ════════════════════════════════════════════════════
+# V1 新任务实现 (Phase 2)
+# ════════════════════════════════════════════════════
+
+async def _v1_generate_market_state():
+    """[V1-A2] 生成 MarketStateDaily。"""
+    logger.info("[V1-Scheduler] 开始生成 MarketStateDaily...")
+    try:
+        from app.database import async_session
+        from app.core import market_state_service
+
+        today = date.today()
+        async with async_session() as db:
+            result = await market_state_service.generate_from_snapshot(db, today)
+            logger.info(
+                "[V1-Scheduler] MarketStateDaily 生成成功 date=%s phase=%s temp=%s",
+                result.date, result.market_phase, result.temperature_score,
+            )
+    except Exception as e:
+        logger.error("[V1-Scheduler] MarketStateDaily 生成失败: %s", e, exc_info=True)
+
+
+async def _v1_sync_overnight_context():
+    """[V1-B1] 抓取隔夜上下文（复用新闻同步）。"""
+    logger.info("[V1-Scheduler] 抓取隔夜上下文...")
+    try:
+        from app.api.v1.sync import _sync_news
+        await _sync_news()
+        logger.info("[V1-Scheduler] 隔夜上下文抓取完成")
+    except Exception as e:
+        logger.error("[V1-Scheduler] 隔夜上下文抓取失败: %s", e)
+
+
+async def _v1_generate_battle_brief():
+    """[V1-B2] 生成 BattleBrief。"""
+    logger.info("[V1-Scheduler] 开始生成 BattleBrief...")
+    try:
+        from app.database import async_session
+        from app.core import battle_brief_service
+
+        today = date.today()
+        async with async_session() as db:
+            result = await battle_brief_service.generate(db, today)
+            logger.info(
+                "[V1-Scheduler] BattleBrief 生成成功 date=%s tone=%s",
+                result.date, result.status_tone,
+            )
+    except Exception as e:
+        logger.error("[V1-Scheduler] BattleBrief 生成失败: %s", e, exc_info=True)
+
+
+async def _v1_generate_candidates():
+    """[V1-C2] 生成 CandidatePoolEntry。"""
+    logger.info("[V1-Scheduler] 开始生成 CandidatePoolEntry...")
+    try:
+        from app.database import async_session
+        from app.core import candidate_pool_service
+
+        today = date.today()
+        async with async_session() as db:
+            entries = await candidate_pool_service.generate_candidates(db, today)
+            logger.info(
+                "[V1-Scheduler] CandidatePoolEntry 生成成功 date=%s count=%d",
+                today, len(entries),
+            )
+    except Exception as e:
+        logger.error("[V1-Scheduler] CandidatePoolEntry 生成失败: %s", e, exc_info=True)
+
+
+async def _v1_backfill_candidate_review():
+    """[V1-D1] 回填候选池盘后验证结果。"""
+    logger.info("[V1-Scheduler] 开始回填候选验证结果...")
+    try:
+        from app.database import async_session
+        from app.core import candidate_pool_service
+
+        today = date.today()
+        async with async_session() as db:
+            updated = await candidate_pool_service.backfill_review_outcomes(db, today)
+            logger.info(
+                "[V1-Scheduler] 候选验证回填完成 date=%s updated=%d",
+                today, len(updated),
+            )
+    except Exception as e:
+        logger.error("[V1-Scheduler] 候选验证回填失败: %s", e, exc_info=True)
+
+
+async def _v1_generate_post_market_review():
+    """[V1-D2] 生成 PostMarketReview。"""
+    logger.info("[V1-Scheduler] 开始生成 PostMarketReview...")
+    try:
+        from app.database import async_session
+        from app.core import post_market_review_service
+
+        today = date.today()
+        async with async_session() as db:
+            result = await post_market_review_service.run_review(db, today)
+            logger.info(
+                "[V1-Scheduler] PostMarketReview 生成成功 date=%s grade=%s",
+                result.date, result.brief_grade,
+            )
+    except Exception as e:
+        logger.error("[V1-Scheduler] PostMarketReview 生成失败: %s", e, exc_info=True)
