@@ -134,7 +134,7 @@ async def _migrate_daily_reviews(conn):
 
 async def init_db():
     """Create all tables."""
-    from app.models import stock, rating, analysis, watchlist, news, review, strategy, sentiment, user, llm_usage, market, fundamental, quote  # noqa: F401
+    from app.models import stock, rating, analysis, watchlist, news, review, strategy, sentiment, user, llm_usage, market, fundamental, quote, market_state, battle_brief, candidate_pool, review_outcome  # noqa: F401
 
     async with engine.begin() as conn:
         await _migrate_operation_records(conn)
