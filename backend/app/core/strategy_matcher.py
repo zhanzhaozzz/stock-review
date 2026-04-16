@@ -11,6 +11,7 @@ from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.enums import normalize_market_phase, normalize_market_phase_list
 from app.models.strategy import Strategy
 
 logger = logging.getLogger(__name__)
@@ -21,7 +22,6 @@ POSITION_BY_CYCLE = {
     "发酵": "5-7成",
     "高潮": "5成（随时准备减仓）",
     "高位混沌": "3成以下",
-    "分歧": "2-3成",
     "退潮": "空仓",
 }
 
@@ -31,7 +31,6 @@ CAUTION_BY_CYCLE = {
     "发酵": "跟随主线龙头，不追高位接力",
     "高潮": "只做最高标接力，亏钱效应来临立即撤退",
     "高位混沌": "方向不明，轻仓试错，不恋战",
-    "分歧": "龙头分歧不追，等转一致再加仓",
     "退潮": "空仓休息是最好的策略",
 }
 
@@ -41,13 +40,16 @@ async def match_strategies(
     db: AsyncSession,
 ) -> dict:
     """根据情绪周期匹配适用战法。"""
+    cycle_phase = normalize_market_phase(cycle_phase)
+
     stmt = select(Strategy).where(Strategy.is_active == True)
     result = await db.execute(stmt)
     all_strategies = result.scalars().all()
 
     matched = []
     for s in all_strategies:
-        cycles = s.applicable_cycles if isinstance(s.applicable_cycles, list) else []
+        raw_cycles = s.applicable_cycles if isinstance(s.applicable_cycles, list) else []
+        cycles = normalize_market_phase_list(raw_cycles)
         if cycle_phase in cycles:
             matched.append({
                 "id": s.id,

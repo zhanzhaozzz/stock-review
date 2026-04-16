@@ -3,7 +3,7 @@ from pydantic import BaseModel
 from typing import Literal, Optional
 
 ReviewStatus = Literal["draft", "published"]
-SentimentCycleMain = Literal["启动期", "发酵期", "高潮期", "高位混沌期", "退潮期", "低位混沌期"]
+SentimentCycleMain = Literal["冰点", "启动", "发酵", "高潮", "高位混沌", "退潮"]
 ConclusionQuadrant = Literal["情指共振", "情好指差", "情差指好", "情指双杀"]
 
 

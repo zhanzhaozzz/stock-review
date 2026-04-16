@@ -11,11 +11,10 @@ import {
 const PHASE_Y: Record<string, number> = {
   "冰点": 1,
   "退潮": 2,
-  "分歧": 3,
-  "高位混沌": 4,
   "启动": 3,
-  "发酵": 5,
+  "发酵": 4,
   "高潮": 6,
+  "高位混沌": 5,
 };
 
 interface SentimentLog {

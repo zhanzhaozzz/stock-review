@@ -4,7 +4,7 @@ import logging
 from datetime import date
 
 from app.config import get_settings
-from app.core.enums import CYCLE_DISPLAY_MAP, QUADRANTS
+from app.core.enums import MARKET_PHASES, QUADRANTS
 from app.core.market_review import get_daily_context
 from app.core.sentiment_engine import judge_cycle_with_ai
 from app.llm.client import chat
@@ -12,7 +12,7 @@ from app.llm.prompts.review import REVIEW_SYSTEM_PROMPT, build_review_prompt
 
 logger = logging.getLogger(__name__)
 
-SENTIMENT_ENUM = set(CYCLE_DISPLAY_MAP.values())
+SENTIMENT_ENUM = set(MARKET_PHASES)
 QUADRANT_ENUM = set(QUADRANTS)
 
 
@@ -130,17 +130,19 @@ async def _generate_structured_review(daily_context: dict, cycle_result: dict, p
 def _normalize_sentiment(raw_sentiment: str, cycle_phase: str) -> str:
     if raw_sentiment in SENTIMENT_ENUM:
         return raw_sentiment
-    return CYCLE_DISPLAY_MAP.get(cycle_phase, "低位混沌期")
+    if cycle_phase in SENTIMENT_ENUM:
+        return cycle_phase
+    return "冰点"
 
 
 def _normalize_quadrant(raw_quadrant: str, sentiment_cycle_main: str) -> str:
     if raw_quadrant in QUADRANT_ENUM:
         return raw_quadrant
-    if sentiment_cycle_main in {"启动期", "发酵期", "高潮期"}:
+    if sentiment_cycle_main in {"启动", "发酵", "高潮"}:
         return "情指共振"
-    if sentiment_cycle_main == "高位混沌期":
+    if sentiment_cycle_main == "高位混沌":
         return "情好指差"
-    if sentiment_cycle_main == "退潮期":
+    if sentiment_cycle_main == "退潮":
         return "情指双杀"
     return "情差指好"
 

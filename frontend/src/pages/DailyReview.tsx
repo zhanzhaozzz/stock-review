@@ -62,7 +62,7 @@ interface LimitUpData {
   promotion_rate_text?: string;
 }
 
-const phaseOptions = ["启动期", "发酵期", "高潮期", "高位混沌期", "退潮期", "低位混沌期"];
+const phaseOptions = ["冰点", "启动", "发酵", "高潮", "高位混沌", "退潮"];
 const quadrantOptions = ["情指共振", "情好指差", "情差指好", "情指双杀"];
 
 function ComboBox({
@@ -112,12 +112,12 @@ function ComboBox({
 }
 
 const phaseColors: Record<string, string> = {
-  "启动期": "text-cyan-300 bg-cyan-500/10 border-cyan-500/30",
-  "发酵期": "text-lime-300 bg-lime-500/10 border-lime-500/30",
-  "高潮期": "text-red-300 bg-red-500/10 border-red-500/30",
-  "高位混沌期": "text-yellow-300 bg-yellow-500/10 border-yellow-500/30",
-  "退潮期": "text-orange-300 bg-orange-500/10 border-orange-500/30",
-  "低位混沌期": "text-blue-300 bg-blue-500/10 border-blue-500/30",
+  "冰点": "text-blue-300 bg-blue-500/10 border-blue-500/30",
+  "启动": "text-cyan-300 bg-cyan-500/10 border-cyan-500/30",
+  "发酵": "text-lime-300 bg-lime-500/10 border-lime-500/30",
+  "高潮": "text-red-300 bg-red-500/10 border-red-500/30",
+  "高位混沌": "text-yellow-300 bg-yellow-500/10 border-yellow-500/30",
+  "退潮": "text-orange-300 bg-orange-500/10 border-orange-500/30",
 };
 
 export default function DailyReview() {

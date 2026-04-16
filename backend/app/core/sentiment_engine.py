@@ -1,7 +1,7 @@
 """情绪周期判断引擎 — 基于涨停梯队数据 + 规则 + AI 辅助推断情绪周期阶段。
 
 情绪周期:
-  冰点 → 启动 → 发酵 → 高潮 → (高位混沌) → 分歧 → 退潮 → 冰点
+  冰点 → 启动 → 发酵 → 高潮 → 高位混沌 → 退潮 → 冰点
 
 判断依据:
   - 市场高度 (连板层数)
@@ -46,19 +46,19 @@ def judge_cycle_by_rules(limit_up_data: dict, prev_phases: list[str] = None) -> 
         phase = "启动"
         confidence = 55
     elif prev in ("高潮", "高位混沌") and broken >= 5:
-        phase = "分歧"
+        phase = "高位混沌"
         confidence = 65
     elif prev in ("高潮", "高位混沌") and total_zt < 50 and broken <= 2:
         phase = "高位混沌"
         confidence = 50
-    elif prev in ("分歧",) and total_zt < 30:
+    elif prev in ("高位混沌",) and total_zt < 30:
         phase = "退潮"
         confidence = 60
-    elif prev in ("分歧",) and total_zt >= 40:
+    elif prev in ("高位混沌",) and total_zt >= 40:
         phase = "发酵"
         confidence = 45
     else:
-        phase = prev or "震荡"
+        phase = prev or "冰点"
         confidence = 35
 
     return {
@@ -107,7 +107,7 @@ async def judge_cycle_with_ai(
 {chr(10).join(context_parts)}
 
 情绪周期阶段（只能选一个）:
-冰点 / 启动 / 发酵 / 高潮 / 高位混沌 / 分歧 / 退潮
+冰点 / 启动 / 发酵 / 高潮 / 高位混沌 / 退潮
 
 请输出 JSON（不要输出其他内容）:
 {{"phase": "<阶段>", "confidence": <0-100置信度>, "reason": "<50字判断依据>"}}"""

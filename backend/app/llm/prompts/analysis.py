@@ -62,7 +62,7 @@ def build_analysis_prompt(
   "key_points": ["<要点1>", "<要点2>", "<要点3>"],
   "risk_warnings": ["<风险1>", "<风险2>"],
   "sentiment_context": {
-    "current_cycle": "<当前市场情绪周期: 冰点/启动/发酵/高潮/分歧/退潮>",
+    "current_cycle": "<当前市场情绪周期: 冰点/启动/发酵/高潮/高位混沌/退潮>",
     "applicable_strategy": "<建议采用的交易策略>",
     "strategy_reason": "<推荐该策略的原因>"
   },

@@ -29,16 +29,25 @@ const phaseColors: Record<string, string> = {
   "发酵": "bg-lime-500/15 text-lime-300 border-lime-500/30",
   "高潮": "bg-red-500/15 text-red-300 border-red-500/30",
   "高位混沌": "bg-yellow-500/15 text-yellow-300 border-yellow-500/30",
-  "分歧": "bg-purple-500/15 text-purple-300 border-purple-500/30",
   "退潮": "bg-orange-500/15 text-orange-300 border-orange-500/30",
 };
 
-function daysBetween(a: Date, b: Date) {
-  return Math.floor((a.getTime() - b.getTime()) / (24 * 3600 * 1000));
-}
+const WEEKDAYS = ["一", "二", "三", "四", "五", "六", "日"];
 
 function iso(d: Date) {
-  return d.toISOString().slice(0, 10);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function getMonthDays(year: number, month: number) {
+  return new Date(year, month + 1, 0).getDate();
+}
+
+function getFirstDayOfWeek(year: number, month: number) {
+  const day = new Date(year, month, 1).getDay();
+  return day === 0 ? 6 : day - 1;
 }
 
 export default function ReviewHistory() {
@@ -48,12 +57,16 @@ export default function ReviewHistory() {
   const [loading, setLoading] = useState(true);
   const [phaseFilter, setPhaseFilter] = useState<string>("全部");
 
+  const now = new Date();
+  const [calYear, setCalYear] = useState(now.getFullYear());
+  const [calMonth, setCalMonth] = useState(now.getMonth());
+
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
       const [r1, r2] = await Promise.allSettled([
-        api.get("/review/list?limit=100"),
-        api.get("/review/sentiment?limit=90"),
+        api.get("/review/list?limit=200"),
+        api.get("/review/sentiment?limit=200"),
       ]);
       if (r1.status === "fulfilled") setReviews(r1.value.data || []);
       if (r2.status === "fulfilled") setSentiment(r2.value.data || []);
@@ -72,16 +85,33 @@ export default function ReviewHistory() {
     return m;
   }, [reviews]);
 
-  const recentDays = useMemo(() => {
-    const today = new Date();
-    const list: Date[] = [];
-    for (let i = 0; i < 90; i++) {
-      const d = new Date(today);
-      d.setDate(today.getDate() - i);
-      list.push(d);
-    }
-    return list.reverse();
-  }, []);
+  const calendarCells = useMemo(() => {
+    const totalDays = getMonthDays(calYear, calMonth);
+    const startWeekday = getFirstDayOfWeek(calYear, calMonth);
+    const cells: (Date | null)[] = [];
+    for (let i = 0; i < startWeekday; i++) cells.push(null);
+    for (let d = 1; d <= totalDays; d++) cells.push(new Date(calYear, calMonth, d));
+    const trailing = (7 - (cells.length % 7)) % 7;
+    for (let i = 0; i < trailing; i++) cells.push(null);
+    return cells;
+  }, [calYear, calMonth]);
+
+  const prevMonth = () => {
+    if (calMonth === 0) { setCalYear((y) => y - 1); setCalMonth(11); }
+    else setCalMonth((m) => m - 1);
+  };
+  const nextMonth = () => {
+    if (calMonth === 11) { setCalYear((y) => y + 1); setCalMonth(0); }
+    else setCalMonth((m) => m + 1);
+  };
+  const goToday = () => {
+    const t = new Date();
+    setCalYear(t.getFullYear());
+    setCalMonth(t.getMonth());
+  };
+
+  const isCurrentMonth = calYear === now.getFullYear() && calMonth === now.getMonth();
+  const todayStr = iso(now);
 
   const filteredReviews = useMemo(() => {
     if (phaseFilter === "全部") return reviews;
@@ -93,6 +123,21 @@ export default function ReviewHistory() {
     for (const r of reviews) if (r.market_sentiment) set.add(r.market_sentiment);
     return ["全部", ...Array.from(set)];
   }, [reviews]);
+
+  const monthStats = useMemo(() => {
+    let total = 0, confirmed = 0;
+    const phaseCount: Record<string, number> = {};
+    for (const cell of calendarCells) {
+      if (!cell) continue;
+      const r = reviewMap.get(iso(cell));
+      if (r) {
+        total++;
+        if (r.is_confirmed) confirmed++;
+        if (r.market_sentiment) phaseCount[r.market_sentiment] = (phaseCount[r.market_sentiment] || 0) + 1;
+      }
+    }
+    return { total, confirmed, phaseCount };
+  }, [calendarCells, reviewMap]);
 
   return (
     <div className="space-y-6">
@@ -135,43 +180,91 @@ export default function ReviewHistory() {
             />
           </div>
 
-          {/* 日历视图（近90天） */}
+          {/* 月历视图 */}
           <div className="bg-card rounded-xl p-5 border border-edge">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-semibold text-muted">日历视图（近90天）</h3>
-              <div className="text-xs text-dim">
-                点击任意交易日进入复盘，无记录可补充
+            {/* 月份导航 */}
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <button onClick={prevMonth} className="w-8 h-8 flex items-center justify-center rounded-lg bg-input hover:bg-card-hover transition text-sm">&lt;</button>
+                <h3 className="text-base font-semibold tabular-nums min-w-[120px] text-center">
+                  {calYear} 年 {calMonth + 1} 月
+                </h3>
+                <button onClick={nextMonth} className="w-8 h-8 flex items-center justify-center rounded-lg bg-input hover:bg-card-hover transition text-sm">&gt;</button>
+                {!isCurrentMonth && (
+                  <button onClick={goToday} className="ml-2 px-3 py-1 text-xs rounded-lg bg-blue-500/15 text-blue-300 border border-blue-500/30 hover:bg-blue-500/25 transition">
+                    回到本月
+                  </button>
+                )}
+              </div>
+              <div className="flex items-center gap-4 text-xs text-dim">
+                <span>复盘 {monthStats.total} 天</span>
+                <span>已确认 {monthStats.confirmed} 天</span>
+                {Object.entries(monthStats.phaseCount).map(([p, c]) => (
+                  <span key={p} className={phaseColors[p]?.split(" ")[1] || "text-dim"}>
+                    {p} {c}
+                  </span>
+                ))}
               </div>
             </div>
-            <div className="grid grid-cols-15 gap-2">
-              {recentDays.map((d) => {
-                const key = iso(d);
+
+            {/* 星期表头 */}
+            <div className="grid grid-cols-7 gap-2 mb-2">
+              {WEEKDAYS.map((w, i) => (
+                <div key={w} className={`text-center text-xs font-medium py-1 ${i >= 5 ? "text-dim/50" : "text-muted"}`}>
+                  {w}
+                </div>
+              ))}
+            </div>
+
+            {/* 日期格子 */}
+            <div className="grid grid-cols-7 gap-2">
+              {calendarCells.map((cell, idx) => {
+                if (!cell) {
+                  return <div key={`empty-${idx}`} className="h-[72px]" />;
+                }
+                const key = iso(cell);
                 const r = reviewMap.get(key);
                 const phase = r?.market_sentiment || "";
-                const isWeekend = d.getDay() === 0 || d.getDay() === 6;
-                const isFuture = d > new Date();
+                const isWeekend = cell.getDay() === 0 || cell.getDay() === 6;
+                const isFuture = key > todayStr;
+                const isToday = key === todayStr;
                 const isTradeDay = !isWeekend && !isFuture;
-                const cls = phase ? (phaseColors[phase] || "bg-input text-secondary border-edge") : isTradeDay ? "bg-base text-dim border-gray-800 border-dashed" : "bg-base text-dim border-gray-900";
-                const dim = daysBetween(new Date(), d) < 7 ? "ring-1 ring-blue-500/20" : "";
+
+                const bgCls = phase
+                  ? (phaseColors[phase] || "bg-input text-secondary border-edge")
+                  : isWeekend
+                    ? "bg-base/50 text-dim/40 border-transparent"
+                    : isFuture
+                      ? "bg-base text-dim/40 border-gray-800/50"
+                      : "bg-base text-dim border-gray-800 border-dashed";
+
+                const todayRing = isToday ? "ring-2 ring-blue-500/40" : "";
                 const clickable = isTradeDay && (phaseFilter === "全部" || !r || phase === phaseFilter);
+
                 return (
                   <button
                     key={key}
                     onClick={() => clickable && navigate(`/review?date=${key}`)}
-                    className={`h-14 rounded-lg border p-2 text-left transition ${cls} ${dim} ${clickable ? "hover:bg-card-hover cursor-pointer" : "opacity-40 cursor-default"}`}
+                    className={`h-[72px] rounded-lg border p-2 text-left transition ${bgCls} ${todayRing} ${clickable ? "hover:bg-card-hover cursor-pointer" : isWeekend || isFuture ? "cursor-default" : "opacity-50 cursor-default"}`}
                     disabled={!clickable}
                     title={r ? `${key} ${phase} 高度${r.market_height}板` : isTradeDay ? `${key} 点击补充复盘` : key}
                   >
-                    <div className="text-[11px] font-mono">{key.slice(5)}</div>
+                    <div className="flex items-center justify-between">
+                      <span className={`text-xs font-mono ${isToday ? "text-blue-400 font-bold" : ""}`}>
+                        {cell.getDate()}
+                      </span>
+                      {r?.is_confirmed && (
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                      )}
+                    </div>
                     {r ? (
-                      <div className="mt-1 text-[11px] text-secondary/90 truncate">
-                        {phase} · {r.market_height}板
+                      <div className="mt-1.5 space-y-0.5">
+                        <div className="text-[11px] truncate">{phase}</div>
+                        <div className="text-[10px] text-secondary/70">{r.market_height}板</div>
                       </div>
                     ) : isTradeDay ? (
-                      <div className="mt-1 text-[11px] text-dim/60">补盘</div>
-                    ) : (
-                      <div className="mt-1 text-[11px] text-dim">—</div>
-                    )}
+                      <div className="mt-2 text-[11px] text-dim/50">补盘</div>
+                    ) : null}
                   </button>
                 );
               })}

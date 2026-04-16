@@ -14,7 +14,7 @@ interface StrategyItem {
   sort_order: number;
 }
 
-const CYCLE_OPTIONS = ["冰点", "启动", "发酵", "高潮", "高位混沌", "分歧", "退潮"];
+const CYCLE_OPTIONS = ["冰点", "启动", "发酵", "高潮", "高位混沌", "退潮"];
 
 export default function Strategies() {
   const [strategies, setStrategies] = useState<StrategyItem[]>([]);

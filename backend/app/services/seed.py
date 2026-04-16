@@ -14,7 +14,7 @@ INITIAL_STRATEGIES = [
     {
         "name": "擒龙战法",
         "applicable_cycles": ["发酵", "高潮"],
-        "conditions": "主线上升期，龙头地位明确",
+        "conditions": "主线发酵或高潮阶段，龙头地位明确",
         "entry_rules": (
             "1. 龙头首分后弱转强（竞价、打板）\n"
             "2. 盘龙低吸 分歧转修复（底背驰加典型的底分型）"
@@ -33,8 +33,8 @@ INITIAL_STRATEGIES = [
     },
     {
         "name": "补涨套利",
-        "applicable_cycles": ["高位混沌", "分歧"],
-        "conditions": "主线上升期、主线高位混沌期",
+        "applicable_cycles": ["高位混沌"],
+        "conditions": "主线发酵至高潮阶段、主线高位混沌阶段",
         "entry_rules": (
             "1. 盘龙分歧转修复主线内的前排首板（打板，要求距调整线+3%内三天内启动）\n"
             "2. 主线分歧转修复次日弱转强 前排 1进2（竞价、打板）"
@@ -50,17 +50,17 @@ INITIAL_STRATEGIES = [
     {
         "name": "缠龙低吸",
         "applicable_cycles": ["高位混沌"],
-        "conditions": "高位混沌期，主线分歧转修复日",
+        "conditions": "高位混沌阶段，主线分歧转修复日",
         "entry_rules": "主线分歧转修复日低吸至少是突破近期平台的首板 30F/60F回调笔",
         "exit_rules": "标的反弹无力或板块持续退潮",
-        "position_rules": "条件: 要求主线题材大，市场上升趋势阶段，情绪修复点",
+        "position_rules": "条件: 要求主线题材大，市场发酵至高潮阶段，情绪修复点",
         "buy_point_rules": "简易性: 30F/60F底分型停顿法",
         "sort_order": 3,
     },
     {
         "name": "试错轻仓",
         "applicable_cycles": ["冰点", "启动"],
-        "conditions": "冰点期、低位混沌期，切换至潜在主线",
+        "conditions": "冰点阶段，切换至潜在主线",
         "entry_rules": (
             "1. 首板 指数、情绪冰点共振反转（打板，要求距调整线+3%内三天内启动）\n"
             "2. 1进2、2进3 前排 弱转强、分歧转修复（竞价、打板）"
