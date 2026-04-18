@@ -29,6 +29,15 @@ frontend/node_modules/
 frontend/dist/
 backend/static/
 
+# Logs
+.logs/
+
+# Task docs
+Phase1_MVP_Task
+
+# Local docs
+启动脚本.md
+
 # OS
 .DS_Store
 Thumbs.db
