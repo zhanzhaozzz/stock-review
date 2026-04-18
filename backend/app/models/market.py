@@ -1,3 +1,7 @@
+# LEGACY — V1 已由 MarketStateDaily 替代（结构化客观定调）。
+# 保留为原始快照缓存层，不再作为页面主结论层。
+# market_state_service.generate_from_snapshot 间接消费其数据源。
+
 """市场快照 — 大盘指数、涨跌面、板块排行持久化存储。"""
 from datetime import datetime, date
 

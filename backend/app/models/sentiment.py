@@ -1,3 +1,7 @@
+# LEGACY — V1 已由 MarketStateDaily.market_phase 替代。
+# 保留历史数据，不再作为新页面主阶段来源。
+# SentimentTrend.tsx 仍可引用此表查看历史趋势。
+
 from datetime import datetime, date
 
 from sqlalchemy import String, Integer, Float, Boolean, Text, Date, DateTime

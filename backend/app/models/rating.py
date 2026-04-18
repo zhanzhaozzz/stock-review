@@ -1,3 +1,6 @@
+# LEGACY — 量化评级保留为辅助工具，不再作为 V1 主流程入口。
+# /ratings 页面仍可通过 URL 直接访问但不在主导航。
+
 from datetime import datetime, date
 
 from sqlalchemy import String, Float, Integer, Text, Date, DateTime, UniqueConstraint, JSON

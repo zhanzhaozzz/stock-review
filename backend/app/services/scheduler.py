@@ -57,7 +57,7 @@ def setup_scheduler():
     rating_hour, rating_minute = _shift_time(hour, minute, 10)
     review_hour, review_minute = _shift_time(hour, minute, 20)
 
-    # ── 旧任务（保留不动） ────────────────────────────
+    # ── LEGACY 旧任务（并行期保留运行，V1 稳定后可注释） ──
     scheduler.add_job(
         _sync_market_data,
         CronTrigger(hour=hour, minute=minute, day_of_week="mon-fri"),
@@ -184,7 +184,8 @@ def setup_scheduler():
 
 
 # ════════════════════════════════════════════════════
-# 旧任务实现（保留不动）
+# LEGACY 旧任务实现（并行期保留运行，V1 稳定后可注释）
+# 回滚方式：若 V1 异常，注释上方 V1 任务注册代码即可恢复旧流程
 # ════════════════════════════════════════════════════
 
 async def _sync_market_data():

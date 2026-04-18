@@ -1,3 +1,5 @@
+# LEGACY — AI 分析历史保留为辅助工具，不再作为 V1 主流程入口。
+
 from datetime import datetime, date
 
 from sqlalchemy import String, Float, Integer, Text, Date, DateTime, JSON

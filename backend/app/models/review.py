@@ -1,3 +1,7 @@
+# LEGACY — V1 已由 PostMarketReview + BattleBrief + MarketStateDaily 替代。
+# 保留数据和旧 Scheduler 写入，不再作为新 UI 主语义源。
+# 回滚时可切回此表消费旧复盘页 /review/history。
+
 from datetime import datetime, date
 
 from sqlalchemy import String, Integer, Float, Boolean, Text, Date, DateTime
