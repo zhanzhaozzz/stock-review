@@ -3,7 +3,9 @@ import { NavLink } from "react-router-dom";
 const navItems = [
   { to: "/", label: "AI 作战台", icon: "⚔️" },
   { to: "/candidates", label: "候选池", icon: "🎯" },
-  { to: "/review", label: "盘后复盘", icon: "📝" },
+  { to: "/review/validation", label: "盘后校正", icon: "✅" },
+  { to: "/review", label: "复盘工作台", icon: "📝" },
+  { to: "/review/history", label: "历史复盘", icon: "📋" },
   { to: "/watchlist", label: "自选股", icon: "⭐" },
   { to: "/settings", label: "设置", icon: "⚙️" },
 ];
@@ -20,7 +22,7 @@ export default function Sidebar() {
           <NavLink
             key={item.to}
             to={item.to}
-            end={item.to === "/"}
+            end={item.to === "/" || item.to === "/review"}
             className={({ isActive }) =>
               `flex items-center gap-3 px-5 py-2.5 text-sm transition-colors ${
                 isActive

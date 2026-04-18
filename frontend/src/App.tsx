@@ -9,6 +9,7 @@ import News from "./pages/News";
 import StockDetail from "./pages/StockDetail";
 import DailyReview from "./pages/DailyReview";
 import ReviewHistory from "./pages/ReviewHistory";
+import ReviewValidation from "./pages/ReviewValidation";
 import Strategies from "./pages/Strategies";
 import Operations from "./pages/Operations";
 import Settings from "./pages/Settings";
@@ -29,6 +30,7 @@ export default function App() {
             <Route path="news" element={<News />} />
             <Route path="review" element={<DailyReview />} />
             <Route path="review/history" element={<ReviewHistory />} />
+            <Route path="review/validation" element={<ReviewValidation />} />
             <Route path="strategies" element={<Strategies />} />
             <Route path="operations" element={<Operations />} />
             <Route path="quotes" element={<TradingQuotes />} />
